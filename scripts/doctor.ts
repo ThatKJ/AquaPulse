@@ -42,7 +42,7 @@ run(async () => {
       ? await verifyBedrock()
       : env.BEDROCK_MODEL_ID
         ? { state: "UNVERIFIED", detail: `${env.BEDROCK_MODEL_ID} set; run \`npm run verify:bedrock\` (one inference call) or doctor --live` }
-        : { state: "NOT_CONFIGURED", detail: "BEDROCK_MODEL_ID not set; run `npm run verify:bedrock` to discover and test a model" };
+        : { state: "NOT_CONFIGURED", detail: "BEDROCK_MODEL_ID not set (Bedrock is account-blocked as of 2026-10-10, see docs/AWS_SETUP.md); `npm run verify:bedrock` re-tests with one call" };
     checks.push(["Bedrock", bedrock], ["Rekognition", await verifyRekognition()]);
   }
 
@@ -51,6 +51,26 @@ run(async () => {
   checks.push(["Twilio config", env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER
     ? { state: "UNVERIFIED", detail: "credentials set; no message sent to verify them" }
     : { state: "NOT_CONFIGURED", detail: "alerts use the demo transport" }]);
+  // Public path: the deployed site's own health endpoint reports what it can reach (Lambda via AI_ENDPOINT_URL, Supabase).
+  const publicUrl = process.env.AQUAPULSE_PUBLIC_URL?.replace(/\/+$/, "");
+  if (!publicUrl) {
+    const nc: Check = { state: "NOT_CONFIGURED", detail: "set AQUAPULSE_PUBLIC_URL in .env.local to check the deployed site" };
+    checks.push(["Public site", nc], ["AWS Lambda", nc]);
+  } else {
+    try {
+      const res = await fetch(`${publicUrl}/api/health`, { signal: AbortSignal.timeout(20_000) });
+      const h = (await res.json()) as { aws?: Check; ai?: Check & { observer?: string }; db?: Check & { adapter?: string } };
+      checks.push(["Public site", res.ok ? { state: "PASS", detail: `${publicUrl} · db ${h.db?.adapter ?? "?"} ${h.db?.state ?? "?"}` } : { state: "FAIL", detail: `${publicUrl} returned ${res.status}` }]);
+      // On the public host AWS identity is only reachable through the Lambda, so its state is the Lambda's state.
+      checks.push(["AWS Lambda", { state: h.aws?.state ?? "FAIL", detail: `${h.aws?.detail ?? "no aws block"} · observer ${h.ai?.observer ?? "?"} (${h.ai?.state ?? "?"})` }]);
+    } catch (err) {
+      const f: Check = { state: "FAIL", detail: `${publicUrl} unreachable: ${err instanceof Error ? err.name : "error"}` };
+      checks.push(["Public site", f], ["AWS Lambda", f]);
+    }
+  }
+  checks.push(["n8n", process.env.N8N_BASE_URL
+    ? { state: "UNVERIFIED", detail: `${process.env.N8N_BASE_URL} configured; import n8n/*.json and run a test webhook` }
+    : { state: "NOT_CONFIGURED", detail: "no n8n instance; workflows are importable JSON in n8n/ (see docs/N8N.md)" }]);
   checks.push(["Map provider", await mapProvider()]);
   checks.push(["Build", existsSync(".next/BUILD_ID") ? { state: "PASS", detail: ".next/BUILD_ID present" } : { state: "UNVERIFIED", detail: "no production build found; run `npm run build`" }]);
 

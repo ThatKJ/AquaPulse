@@ -42,3 +42,8 @@ One reducer in `Shell.tsx` holds world, mode, horizon, selection, preview bundle
 
 ## AI Lambda (`infra/ai-lambda`)
 Same `lib/aws` code behind a Function URL with a least-privilege role, so the public web host needs no AWS credentials. Not deployed yet.
+
+## Deployed topology (2026-10-10)
+Browser → Vercel (Next.js, `aquapulse-liard.vercel.app`) → AWS Lambda Function URL (`aquapulse-ai-fn`) → Amazon Rekognition, logs to CloudWatch. Vercel → Supabase (Postgres + PostGIS) with the service-role key, server side only.
+
+`POST /api/state` mirrors the console's incidents, evidence membership, interventions and results into the database (upsert by engine id, debounced, best effort). The engine in the browser stays the source of truth; nothing reads the mirror back yet.

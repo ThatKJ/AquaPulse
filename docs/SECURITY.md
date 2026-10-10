@@ -15,3 +15,8 @@ Hackathon-level controls that are implemented:
 - **Logs**: one JSON line per operation with request id, duration and status. No secrets, image bytes or full account ids. Phone numbers are stored only as SHA-256 hashes.
 
 Not done: authentication for operators (the demo UI is open), distributed rate limiting, malware scanning of uploads.
+
+## Added 2026-10-10
+- `/api/state` (engine-state mirror) is unauthenticated: bounded by schema caps, a 256 KB body limit and a rate limit, and it only upserts rows keyed by engine ids. It needs operator auth before real use.
+- Twilio live mode sends only to numbers in `TWILIO_ALLOWED_TO`; alerts are claimed by idempotency key before sending.
+- The Lambda's role has no Bedrock permission unless a model is configured. The client bundle was scanned for the service-role key, webhook secret and Lambda secret: none present.

@@ -1,0 +1,263 @@
+{
+  "name": "AquaPulse 1 - Citizen report ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aquapulse/citizen-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9fabd956-5fa4-5d80-9f63-82e58ac76008",
+      "name": "Twilio inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "474245c2-9bab-59ee-b22b-7628d98677d1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Twilio form fields -> AquaPulse report contract. No scoring here: AquaPulse computes, n8n orchestrates.\nconst b = $input.first().json.body ?? {};\nif (!b.MessageSid || !b.From) return [{ json: { valid: false, reason: 'MessageSid and From are required' } }];\nconst num = (v) => (v === undefined || v === '' || isNaN(Number(v)) ? undefined : Number(v));\nreturn [{ json: { valid: true, report: {\n  messageId: b.MessageSid,            // idempotency key: a Twilio retry is a duplicate, not a second report\n  from: b.From,\n  text: b.Body ?? '',\n  lat: num(b.Latitude), lng: num(b.Longitude),   // only present when the citizen shares a location pin\n  mediaUrl: b.MediaUrl0 || undefined,\n  mediaContentType: b.MediaContentType0 || undefined,\n  timestamp: new Date().toISOString(),\n} } }];"
+      },
+      "id": "89f79526-a798-5a61-b5da-f3581f3c84d1",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "65db440e-ef31-55bd-a87f-973ef6d75318",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8e094131-4974-50ea-bee1-42f56d23f926",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AQUAPULSE_URL }}/api/webhooks/report",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-aquapulse-secret",
+              "value": "={{ $env.AQUAPULSE_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.report) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "36df52bc-ccc7-5515-9cfa-1deb8a0995c9",
+      "name": "AquaPulse report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "f34993fe-a463-5448-a20e-ac43d3a9773a",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 400,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8e6febfa-fff6-5298-bb7f-ecf306b68a3e",
+      "name": "Accepted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, evidenceId: $json.body.evidenceId, duplicate: $json.body.duplicate }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "e5cda8ca-d428-5073-b7ab-1a636a488903",
+      "name": "Ack",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, status: $json.statusCode, error: $json.body.error }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "26b67819-756f-50ca-bd3f-9b93c9475bd1",
+      "name": "Upstream error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: $json.reason }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "b9cfb1b7-7d7c-55c0-b259-8d6aedbcb5d7",
+      "name": "Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Twilio inbound": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "AquaPulse report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AquaPulse report": {
+      "main": [
+        [
+          {
+            "node": "Accepted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accepted?": {
+      "main": [
+        [
+          {
+            "node": "Ack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upstream error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 120
+  },
+  "active": false
+}

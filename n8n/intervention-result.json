@@ -1,0 +1,172 @@
+{
+  "name": "AquaPulse 4 - Intervention result",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aquapulse/action-complete",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b00e4880-e767-5d11-83c4-fd6a1033a60e",
+      "name": "Action complete",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "4e3b920d-de6e-57af-bb81-ee0a830521c8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AQUAPULSE_URL }}/api/webhooks/action-complete",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-aquapulse-secret",
+              "value": "={{ $env.AQUAPULSE_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ incidentId: $json.body.incidentId, bundleId: $json.body.bundleId, completedAt: $json.body.completedAt ?? new Date().toISOString(), note: $json.body.note }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "1976d5bc-1f79-5a35-b440-d40542b58b97",
+      "name": "Record completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "e79b20bc-3c45-509a-8b36-792e77097ed9",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 400,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d4c17175-fe85-5fb7-98c8-9a208abbe88d",
+      "name": "Recorded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ recorded: true, result: $json.body }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1618d2dc-6c9f-5db2-9d68-6022292a67b0",
+      "name": "Done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ recorded: false, status: $json.statusCode, error: $json.body.error }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "ed35cfb8-945f-590a-be20-8b61408a8274",
+      "name": "Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Action complete": {
+      "main": [
+        [
+          {
+            "node": "Record completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record completion": {
+      "main": [
+        [
+          {
+            "node": "Recorded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recorded?": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 120
+  },
+  "active": false
+}

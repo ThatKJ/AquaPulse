@@ -1,23 +1,57 @@
 # AquaPulse status
 
-States: WORKING (verified, evidence named) · PARTIAL · BLOCKED · NOT STARTED.
+Updated 2026-10-10 (evening). A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment.
 
-| Area | State | Evidence / blocker |
+Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel). Note: this was meant to be a preview deploy; Vercel assigned the project's first deployment to its production alias. App code deployed = commit `44ea345`.
+
+## Live (verified on the public path)
+
+| Area | State | Evidence |
 | --- | --- | --- |
-| Scaffold + production build | WORKING | `next build` exit 0, 2026-10-10 |
-| Shared contracts (`lib/schemas`) | WORKING | typecheck |
-| AWS identity | WORKING | STS GetCallerIdentity ok 2026-10-10 07:36Z, ap-south-1, root user (short-lived `aws login` session) |
-| Bedrock inference | BLOCKED | One Converse call on `apac.amazon.nova-lite-v1:0`, 2026-10-10 07:36Z: `ValidationException` "Operation not allowed" (request 89e87e51-d71d-4284-a1c3-a25df8d1677e). `get-foundation-model-availability` = NOT_AUTHORIZED for Claude and Nova; Anthropic use-case form not filled. Account-level restriction; only AWS Support can lift it. No further Bedrock calls this session |
-| Rekognition (live observer) | WORKING | `npm run verify:bedrock` DetectLabels ok 07:36Z; one synthetic PNG through `POST /api/evidence` on the production build 07:45Z returned `source: rekognition` in 378 ms (correctly judged "no hazard"); `/api/health` then showed AI PASS |
-| Supabase + PostGIS | PARTIAL | Project `aquapulse` (ap-south-1) created; migration `init` applied; `aquapulse_health()` returns PostGIS 3.3, 20 tables; RLS on all 19 app tables; `ST_Distance` on geography returns meters (0.01° lng = 1085 m). Verified through the Supabase connector 2026-10-10. App-side check (`npm run verify:db`) BLOCKED until `SUPABASE_SERVICE_ROLE_KEY` is in `.env.local` |
-| Engine (flood, scarcity, interventions, auction, evidence, memory) | WORKING | 25 vitest tests green; flagship at +30: 3,822 → 190 with D104 + P02 |
-| Command center UI + map | WORKING | Builder verified in a browser at 1440x900 and 1920x1080, zero console errors; orchestrator reviewed screenshots. Basemap-offline fallback verified. Photo upload verified in the browser (live Rekognition result, badged, "Add as report" offered; the add step itself not clicked). Reduced motion not exercised |
-| Demo scenarios + reset | WORKING | Three scenarios play to the end in the browser; determinism asserted in tests. Network-blocked rehearsal of the flood scenario passed |
-| API routes + webhooks | PARTIAL | Health, evidence, ask verified over HTTP; webhook auth and Twilio signature verified by the offline self-check only (`npm run selfcheck`). Verification and action-complete no longer depend on persisted incidents (migration `0002`), but their Supabase path has not been exercised |
-| Twilio | UNVERIFIED | No credentials; alerts use the labelled demo transport |
-| Ask AquaPulse | PARTIAL | Template answers from simulation data (labelled); no LLM while Bedrock is blocked |
-| AI Lambda | NOT STARTED | Packaged and bundles locally; not deployed (needs approval to create the stack and role) |
-| Public URL | NOT STARTED | |
+| AWS Lambda `aquapulse-ai-fn` (stack `aquapulse-ai`, ap-south-1) | PASS | CREATE_COMPLETE 2026-10-10. `/health` with secret 200, without 401. First attempt rolled back on reserved concurrency (new-account limit); redeployed without it after a re-preview showing the same six resources |
+| Rekognition through the Lambda | PASS | Direct `/evidence` call 17:10Z returned `source: rekognition`; upload from the public site returned a Rekognition result in 728 ms, badged REKOGNITION · LIVE |
+| CloudWatch | PASS | One structured `ai-lambda /evidence` line and one `rekognition DetectLabels` line per request, with request ids; no secrets or image bytes |
+| Lambda IAM | PASS | Inline policy only: `rekognition:DetectLabels` and its own log stream/events. No Bedrock, S3 or managed policies. Runtime identity is the assumed role, not root |
+| Public endpoint | PASS | One Function URL, shared-secret gated. No API Gateway, no other new endpoint |
+| Public site | PASS | 1440x900 and 1920x1080 in a fresh browser: zero console errors, no localhost calls, header AWS CONNECTED · AI REKOGNITION · DB SUPABASE |
+| Supabase + PostGIS from the public site | PASS | `/api/health` db PASS (PostGIS 3.3). After the public rehearsal the database held incidents, 6 evidence rows with analysis, 6 incident-evidence links, 1 intervention and its result (effectiveness 0.95). 150 m radius query excludes a facility 225 m away |
+| Webhook contracts on the public site | PASS | report (and duplicate on retry), alert (and no resend on retry), verification, action-complete all 200 with the secret against Supabase; 401 with a wrong secret |
+| Flood scenario (public) | PASS | 14/14 at both sizes; est. 3,822 → 190 |
+| Scarcity scenario (public) | PASS | 6/6 at both sizes |
+| False-report scenario (public) | PASS | 3/3, UNVERIFIED · 14/100 |
+| Reset (public) | PASS | Returns to 1 event, step 0 |
+| Engine | PASS | 25 tests; deterministic |
+| Real-speed flood run (local production build) | PASS | 56 s, average 119 fps, 3 frames over 50 ms (worst 59 ms) |
+
+## Demo / simulated (by design, labelled in the UI)
+
+- The city feed: cells, drains, pipes, facilities, populations, history and the three scenarios are a seeded simulation (header: MODE SIMULATION).
+- Recorded analyses on demo reports (`fixture`, tagged SIM).
+- "Observed" intervention results are simulated observations.
+- Ask AquaPulse answers are templates built from simulation data, labelled "Template answer", not an LLM.
+- Alerts use the demo transport (recorded, not sent).
+
+## Blocked
+
+| Area | Reason |
+| --- | --- |
+| Bedrock | Account-level restriction: `ValidationException: Operation not allowed` on 2026-10-10 07:36Z; Claude and Nova both NOT_AUTHORIZED; Anthropic use-case form unfilled. Only AWS Support can lift it. One check per session; no further calls made. The Lambda role has no Bedrock permission until a model is configured |
+| Citizen report end to end (Twilio → n8n → AquaPulse → AWS → Supabase → dashboard) | No Twilio account and no n8n instance |
+
+## Unverified
+
+- n8n workflows (`n8n/*.json`): generated to the export format, never imported into an instance.
+- Twilio: signature validation, media fetch (including the storage-bucket redirect rule) and live sending are unit-checked only.
+- Reports arriving by webhook are stored but do not appear on the dashboard: the console's world is the in-browser engine, and nothing reads stored reports back into it.
+- Reduced motion; the 1024-wide layout; Ask AquaPulse at 1920 on the public site (answered at 1440; the 1920 check read the page too early).
+- Offline basemap tag after the last polish round (verified before it).
+
+## Known limits
+
+- Engine ids repeat across scenarios (F-01 exists in both flood and false-report), so the database mirror keeps the latest incident per id, not a history.
+- `/api/state` has no operator auth: anyone who finds it can write bounded incident rows. Rate-limited and schema-capped; needs auth before real use.
+- Deploys run as the account root user (the only identity available). The public runtime path does not.
+- Contract-test rows from 2026-10-10 remain in `evidence_events`, `alerts` and `verification_requests`.
 
 ## Review log
 (findings and triage decisions go here: source · finding · Blocker/High/Medium/Nit · act/skip · why)

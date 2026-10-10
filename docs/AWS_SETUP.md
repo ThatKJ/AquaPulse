@@ -35,3 +35,11 @@ The web host has no AWS credentials. Deploy the AI Lambda (`infra/ai-lambda/READ
 npm run doctor            # no Bedrock inference by default
 npm run doctor -- --live  # spends one Bedrock call
 ```
+
+## 6. Deployed AI Lambda (2026-10-10)
+Stack `aquapulse-ai`, ap-south-1: function `aquapulse-ai-fn` (Node 22, 512 MB, 60 s), a Function URL gated by the shared secret, a role limited to `rekognition:DetectLabels` and its own logs, and a 14-day log group. No reserved concurrency (the account's limit of 10 does not allow one). The Bedrock permission is added by the template only when `BEDROCK_MODEL_ID` is set.
+
+- Redeploy: `PREVIEW=1 AI_ENDPOINT_SECRET=… RESERVED_CONCURRENCY=-1 bash infra/ai-lambda/deploy.sh`, read the change set, then `CHANGE_SET=<name> bash infra/ai-lambda/deploy.sh`.
+- Verify: `npm run doctor` (reads the public site's `/api/health`, which reports the Lambda's identity and observer).
+- Remove: `aws cloudformation delete-stack --stack-name aquapulse-ai --region ap-south-1`.
+- The web host (Vercel) holds `AI_ENDPOINT_URL` and `AI_ENDPOINT_SECRET`; it has no AWS credentials.

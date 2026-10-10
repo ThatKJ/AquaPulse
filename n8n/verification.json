@@ -1,0 +1,155 @@
+{
+  "name": "AquaPulse 3 - Trusted verification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aquapulse/verification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "24556c88-b3f7-5fa4-a676-6c69dfcbcbe1",
+      "name": "Verification needed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "ac92f79d-e925-5bac-8c4c-3e4cdf44dd40"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AQUAPULSE_URL }}/api/webhooks/verification",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-aquapulse-secret",
+              "value": "={{ $env.AQUAPULSE_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ incidentId: $json.body.incidentId, lat: $json.body.lat, lng: $json.body.lng, radiusM: $json.body.radiusM ?? 500, question: $json.body.question ?? 'Can you confirm water on the road at this location? Reply with a photo.' }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "b76ec549-dd68-5296-97e1-f0d065db575a",
+      "name": "Record request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: $json.statusCode, result: $json.body, next: \"validator replies arrive through the citizen-report workflow and re-score the incident\" }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ee0a5b66-00a3-55ef-ba24-a85a51222469",
+      "name": "Recorded",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "minutes"
+      },
+      "id": "1a927ec5-a32e-5fa7-974d-f09d421a5540",
+      "name": "Wait for reply window",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Timeout path. No validator reply is NOT treated as confirmation: the incident is never escalated from here.\nreturn [{ json: { timedOut: true, escalated: false } }];"
+      },
+      "id": "f934c116-2fc0-5182-9235-44aa3a118def",
+      "name": "Timeout note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Verification needed": {
+      "main": [
+        [
+          {
+            "node": "Record request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record request": {
+      "main": [
+        [
+          {
+            "node": "Recorded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recorded": {
+      "main": [
+        [
+          {
+            "node": "Wait for reply window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reply window": {
+      "main": [
+        [
+          {
+            "node": "Timeout note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 120
+  },
+  "active": false
+}
