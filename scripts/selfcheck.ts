@@ -141,7 +141,7 @@ async function main() {
   assert.deepEqual([res.status, await errCode(res)], [403, "INVALID_SIGNATURE"]); // the shared secret does not bypass the signature
   res = await twilio(signed(twilioSignature("12345", url, form)));
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /<Response><\/Response>/);
+  assert.match(await res.text(), /<Response><Message>AquaPulse received your report[^<]*Reference: AQ-[0-9A-F]{5}<\/Message><\/Response>/);
 
   // --- Lambda handler ---
   const call = (headers: Record<string, string>, rawPath = "/evidence", body = "{}") =>
