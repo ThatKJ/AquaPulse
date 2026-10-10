@@ -59,7 +59,10 @@ export function CityPulse({
   selectedIncidentId,
   onMode,
   onSelectIncident,
+  bottom,
 }: {
+  /** Height of the bottom strip, so the rail never overlaps it. */
+  bottom: number;
   domain: Domain;
   /** Rank 1 infrastructure priority; only needed in Fix This First mode. */
   topPriority: InfraPriority | null;
@@ -83,7 +86,7 @@ export function CityPulse({
   const hasWorld = Object.keys(world.cells).length > 0;
 
   return (
-    <aside aria-label="City pulse" className="absolute bottom-0 left-0 top-12 z-10 flex w-[280px] flex-col border-r border-hairline bg-panel">
+    <aside aria-label="City pulse" className="absolute left-0 top-12 z-10 flex w-[248px] flex-col border-b border-r border-hairline bg-panel" style={{ maxHeight: `calc(100% - 48px - ${bottom}px)` }}>
       <div className="px-4 pb-3 pt-3">
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-medium text-ink">{fixFirst ? "Prevention" : "City pulse"}</h2>
@@ -100,7 +103,7 @@ export function CityPulse({
         {fixFirst ? (
           topPriority ? (
             <>
-              <p className="tabular mt-1 text-[40px] font-medium leading-none text-ink">
+              <p className="mono mt-1 text-[32px] font-medium leading-none text-ink">
                 {topPriority.assetId}
                 <span className="ml-2 text-[15px] text-muted">{Math.round(topPriority.score)}/100</span>
               </p>
@@ -113,7 +116,7 @@ Priority score · tier {topPriority.tier} · {topAsset?.name ?? "asset"}
           )
         ) : t ? (
           <>
-            <AnimatedNumber value={figureOf(t, domain)} className="tabular mt-1 block text-[40px] font-medium leading-none text-ink" />
+            <AnimatedNumber value={figureOf(t, domain)} className="tabular mt-1 block text-[32px] font-medium leading-none tracking-tight text-ink" />
             <p className="tabular mt-1.5 flex h-4 items-center gap-1 text-[11px] text-muted">
               {delta !== 0 && baseline ? (
                 <>
@@ -151,17 +154,13 @@ Priority score · tier {topPriority.tier} · {topAsset?.name ?? "asset"}
         <Segmented vertical label="Map mode" value={mode} onChange={onMode} options={MODES} />
       </div>
 
+      {world.incidents.length > 0 && (
       <div className="flex min-h-0 flex-1 flex-col border-t border-hairline">
         <div className="flex items-center justify-between px-4 pb-1 pt-3">
           <Label>Incidents</Label>
           <span className="tabular text-[11px] text-faint">{world.incidents.length}</span>
         </div>
         <ul className="min-h-0 flex-1 overflow-y-auto pb-2">
-          {world.incidents.length === 0 && (
-            <li className="px-4">
-              <Empty>No incidents yet. Reports that pass verification open one here; start a demo scenario to see it happen.</Empty>
-            </li>
-          )}
           {world.incidents.map((i) => {
             const on = i.id === selectedIncidentId;
             const p = shown?.cells[i.cellId];
@@ -181,7 +180,7 @@ Priority score · tier {topPriority.tier} · {topAsset?.name ?? "asset"}
                   <Icon size={14} aria-hidden className={off ? "text-faint" : ""} style={off || risk == null ? undefined : { color: bandCss(risk, i.kind) }} />
                   <span className="min-w-0 flex-1">
                     <span className={`block truncate text-[13px] ${off ? "text-faint" : "text-ink"}`}>
-                      <span className="tabular">{i.id}</span> · {human(i.type)}
+                      <span className="mono">{i.id}</span> · {human(i.type)}
                     </span>
                     <span className="block text-[11px] uppercase tracking-[0.06em] text-faint">{i.status}</span>
                   </span>
@@ -197,8 +196,9 @@ Priority score · tier {topPriority.tier} · {topAsset?.name ?? "asset"}
           })}
         </ul>
       </div>
+      )}
 
-      <p className="border-t border-hairline px-4 py-2 text-[11px] leading-snug text-faint">
+      <p className="border-t border-hairline px-4 py-2 text-[10.5px] leading-snug text-faint">
         Infrastructure, demographics and history are simulated. Basemap © OpenFreeMap, OpenMapTiles, OpenStreetMap contributors.
       </p>
     </aside>

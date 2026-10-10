@@ -9,7 +9,7 @@ import type { State } from "./state";
 import { PREDICTED, bandCss, riskBand, type RiskDomain } from "./risk";
 import { Empty, Label, ProvTag, Segmented, Tag, clock, fmt, horizonLabel, iconBtn } from "./ui";
 
-export const STRIP_H = 184;
+export const STRIP_H = 156;
 export const DEMO_H = 37;
 
 /** Which people-figure the app is talking about: follows the mode, or the selected incident's kind. */
@@ -175,7 +175,7 @@ function Timeline({
 function StreamRow({ e, onSelect }: { e: StreamEntry; onSelect: (id: string) => void }) {
   const body = (
     <>
-      <span className="tabular w-12 shrink-0 text-[11px] text-faint">{clock(e.tMin)}</span>
+      <span className="mono w-12 shrink-0 text-[11px] text-faint">{clock(e.tMin)}</span>
       <span className="w-[88px] shrink-0 truncate text-[11px] uppercase tracking-[0.06em] text-muted">{e.kind === "recommendation" ? "recommend" : e.kind}</span>
       <span className="min-w-0 flex-1 truncate text-[13px] text-ink" title={e.detail ? `${e.title} — ${e.detail}` : e.title}>
         {e.title}
@@ -252,7 +252,7 @@ export function BottomStrip({
         <section aria-label="Timeline" className="flex w-[336px] shrink-0 flex-col gap-1.5 border-r border-hairline px-4 py-3">
           <div className="flex items-center justify-between">
             <Label>{fixFirst ? "Prevention" : "Timeline"}</Label>
-            <span className="tabular text-[11px] text-muted">Scenario clock {clock(world.tMin)}</span>
+            <span className="mono text-[11px] text-faint">{clock(world.tMin)}</span>
           </div>
           {fixFirst ? (
             <p className="text-[13px] leading-snug text-muted">
@@ -287,7 +287,7 @@ export function BottomStrip({
 
         <section aria-label="Live intelligence stream" className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between px-4 pb-1 pt-3">
-            <Label>Live intelligence stream</Label>
+            <Label>Activity</Label>
             <Tag>{world.stream.length} events</Tag>
           </div>
           <ul aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 overflow-y-auto pb-1">

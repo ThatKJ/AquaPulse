@@ -115,7 +115,7 @@ export function Shell() {
   const drawer = s.panel === "tankers" || s.panel === "priorities" ? s.panel : s.panel && incident ? "incident" : null;
   const right = drawer ? 380 : 0;
   const bottom = STRIP_H + (demoOpen ? DEMO_H : 0);
-  const padding = useMemo(() => ({ top: 48, left: 280, right, bottom }), [right, bottom]);
+  const padding = useMemo(() => ({ top: 48, left: 248, right, bottom }), [right, bottom]);
   const selectIncident = (id: string | null) => dispatch({ type: "SELECT_INCIDENT", id });
 
   return (
@@ -137,6 +137,7 @@ export function Shell() {
       <LiveReports world={world} dispatch={dispatch} />
       <Header getContext={getContext} hasIncident={incident != null} demoOpen={demoOpen} onToggleDemo={() => dispatch({ type: "DEMO_OPEN", open: !demoOpen })} />
       <CityPulse
+        bottom={bottom}
         world={world}
         shown={shownPreds[hi]}
         baseline={basePreds[hi]}
@@ -163,7 +164,7 @@ export function Shell() {
         demo={s.demo}
         demoOpen={demoOpen}
         scenario={currentScenario(s)}
-        left={280}
+        left={0}
         right={right}
         onHorizon={(h) => dispatch({ type: "SET_HORIZON", horizon: h })}
         onCompare={(compare) => dispatch({ type: "SET_COMPARE", compare })}

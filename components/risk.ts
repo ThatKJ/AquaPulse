@@ -20,7 +20,8 @@ export type RiskBand = {
 // 60 is the engine's facility at-risk threshold (CONFIG), so HIGH starts exactly where a facility becomes "at risk".
 export const RISK_BANDS: RiskBand[] = [
   { key: "safe", label: "Safe", min: 0, glyph: "○", flood: [45, 110, 125], scarcity: [52, 96, 140] },
-  { key: "watch", label: "Watch", min: 25, glyph: "◔", flood: [34, 211, 238], scarcity: [96, 165, 250] },
+  // Watch is a calm state and covers most of the map on a wet day, so its cyan is deliberately muted.
+  { key: "watch", label: "Watch", min: 25, glyph: "◔", flood: [52, 158, 184], scarcity: [84, 140, 214] },
   { key: "elevated", label: "Elevated", min: 45, glyph: "◑", flood: [245, 158, 11], scarcity: [245, 158, 11] },
   { key: "high", label: "High", min: 60, glyph: "◕", flood: [249, 115, 22], scarcity: [249, 115, 22] },
   { key: "critical", label: "Critical", min: 80, glyph: "●", flood: [239, 68, 68], scarcity: [239, 68, 68] },

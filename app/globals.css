@@ -40,6 +40,11 @@ body {
 }
 
 .tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reserved for incident ids, timestamps and system state. */
+.mono {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }

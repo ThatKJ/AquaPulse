@@ -27,13 +27,12 @@ function useHealth(): Health {
 }
 
 /** One "LABEL value" status chip: icon and text carry the state, colour only repeats it. */
-function Chip({ icon: Icon, label, value, title, tone = "text-ink" }: { icon: LucideIcon; label: string; value: string; title?: string; tone?: string }) {
+function Chip({ label, value, title, tone = "text-ink" }: { icon?: LucideIcon; label: string; value: string; title?: string; tone?: string }) {
   return (
-    <Tag title={title} className="h-6">
-      <Icon size={12} aria-hidden className={tone} />
-      <span className="text-faint">{label}</span>
-      <span className={tone}>{value}</span>
-    </Tag>
+    <span title={title} className="flex shrink-0 items-baseline gap-1.5 whitespace-nowrap text-[11px]">
+      <span className="uppercase tracking-[0.08em] text-faint">{label}</span>
+      <span className={`capitalize ${tone}`}>{value}</span>
+    </span>
   );
 }
 
@@ -70,7 +69,7 @@ function StatusChips({ health }: { health: Health }) {
     <>
       {mode}
       <Chip icon={awsChip[0]} label="AWS" value={awsChip[1]} tone={awsChip[2]} title={[aws.region, aws.state === "FAIL" ? "deterministic demo engine active" : null].filter(Boolean).join(" · ") || aws.state} />
-      <Chip icon={Brain} label="AI" value={ai.observer} tone={ai.observer === "none" ? "text-muted" : "text-ink"} title={ai.modelId ?? `Evidence observer: ${ai.observer} (${ai.state})`} />
+      <Chip icon={Brain} label="Vision" value={ai.observer} tone={ai.observer === "none" ? "text-muted" : "text-ink"} title={ai.modelId ?? `Evidence observer: ${ai.observer} (${ai.state})`} />
       <Chip icon={Database} label="DB" value={db.adapter} title={db.adapter === "memory" ? "Running in memory mode" : `Supabase (${db.state})`} />
 {/* Orchestration and comms only fit beside the command line on wide screens. */}
       <span className="hidden items-center gap-1.5 min-[1600px]:flex">
@@ -227,7 +226,7 @@ export function Header({
       </p>
       <div className="min-w-0 flex-1" />
       <AskAquaPulse getContext={getContext} hasIncident={hasIncident} />
-      <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label="System status">
+      <div className="flex shrink-0 items-center gap-4 border-l border-hairline pl-4" role="group" aria-label="System status">
         <StatusChips health={health} />
       </div>
       <button

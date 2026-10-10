@@ -25,7 +25,7 @@ export function Tag({ children, className = "", title }: { children: ReactNode; 
   return (
     <span
       title={title}
-      className={`tabular inline-flex h-[18px] shrink-0 items-center gap-1 border border-hairline px-1.5 text-[11px] uppercase leading-none tracking-[0.06em] text-muted ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 text-[10.5px] font-medium uppercase leading-none tracking-[0.08em] text-faint ${className}`}
     >
       {children}
     </span>
@@ -131,7 +131,7 @@ export function Segmented<T extends string | number>({
     (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
   };
   return (
-    <div role="radiogroup" aria-label={label} className={`flex border border-hairline ${vertical ? "flex-col" : ""} ${className}`}>
+    <div role="radiogroup" aria-label={label} className={`flex ${vertical ? "flex-col" : "border border-hairline"} ${className}`}>
       {options.map((o, i) => {
         const on = o.value === value;
         return (
@@ -143,13 +143,14 @@ export function Segmented<T extends string | number>({
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => move(e, i)}
-            className={`flex min-w-0 flex-1 justify-center gap-0.5 border-hairline px-2 py-1.5 text-[11px] uppercase tracking-[0.06em] transition-colors duration-150 focus-visible:z-10 ${
-              vertical ? "items-center justify-between border-t px-3 first:border-t-0" : "flex-col items-center border-l first:border-l-0"
-            } ${on ? "bg-panel-raised text-ink" : "text-muted hover:text-ink"}`}
+            className={`flex min-w-0 flex-1 gap-0.5 transition-colors duration-150 focus-visible:z-10 ${
+              vertical
+                ? `items-center justify-between border-l-2 px-3 py-1.5 text-[13px] ${on ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"}`
+                : `flex-col items-center justify-center border-l border-hairline px-2 py-1.5 text-[11px] uppercase tracking-[0.06em] first:border-l-0 ${on ? "bg-panel-raised text-ink" : "text-muted hover:text-ink"}`
+            }`}
           >
             <span className="tabular font-medium">{o.label}</span>
             {o.sub != null && <span className="tabular text-[11px] normal-case tracking-normal text-faint">{o.sub}</span>}
-            {vertical && on && <span aria-hidden className="h-1.5 w-1.5 bg-ink" />}
           </button>
         );
       })}

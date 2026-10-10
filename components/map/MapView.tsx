@@ -75,8 +75,9 @@ type RGBA = [number, number, number, number];
 const INK: RGB = [230, 237, 243];
 const css = (c: RGB) => `rgb(${c.join(" ")})`;
 // Every cell is perceptible at rest; alpha and outline strength rise with the band so critical dominates.
-const FILL_A: Record<RiskBandKey, number> = { safe: 58, watch: 88, elevated: 128, high: 166, critical: 212 };
-const LINE_A: Record<RiskBandKey, number> = { safe: 150, watch: 170, elevated: 200, high: 225, critical: 255 };
+const FILL_A: Record<RiskBandKey, number> = { safe: 52, watch: 72, elevated: 128, high: 166, critical: 212 };
+// Calm bands keep a visible but quiet outline, so the grid never reads as neon.
+const LINE_A: Record<RiskBandKey, number> = { safe: 78, watch: 108, elevated: 200, high: 225, critical: 255 };
 const bandIndex = (risk: number) => RISK_BANDS.indexOf(riskBand(risk));
 // Priority tiers differ by outline strength and height as well as colour.
 const TIER: Record<1 | 2 | 3, { rgb: RGB; fill: number; line: RGBA; lift: number }> = {
@@ -179,7 +180,7 @@ function Legend({ mode, style }: { mode: Mode; style: React.CSSProperties }) {
     [Truck, "Tanker"],
   ];
   return (
-    <div className="absolute z-10 border border-hairline bg-panel text-[11px] text-muted" style={style}>
+    <div className="absolute z-10 bg-surface/80 text-[11px] text-muted" style={style}>
       {open && (
         <ul id="marker-key" className="grid grid-cols-3 gap-x-4 gap-y-1 border-b border-hairline px-2.5 py-2">
           {key.map(([Icon, label]) => (
