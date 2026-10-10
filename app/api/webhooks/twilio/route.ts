@@ -42,10 +42,12 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
   const parsed = TwilioInboundSchema.safeParse(params);
   if (!parsed.success) throw new HttpError(400, "INVALID_REQUEST", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
   const m = parsed.data;
-  await ingestReport({
+  const result = await ingestReport({
     messageId: m.MessageSid, from: m.From, text: m.Body, lat: m.Latitude, lng: m.Longitude,
     mediaUrl: m.MediaUrl0, timestamp: new Date().toISOString(),
   });
+
+  if (result.analysisError) console.error(JSON.stringify({ requestId, route: "webhooks/twilio", analysisError: result.analysisError }));
 
   // Empty TwiML: acknowledge without replying to the citizen.
   return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {

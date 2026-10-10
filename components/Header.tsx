@@ -180,7 +180,7 @@ export function Header({
       <div className="flex-1" />
       <AskAquaPulse getContext={getContext} />
       {health.status === "ok" && (
-        <span className="tabular text-[11px] uppercase tracking-[0.06em] text-faint" title={health.data.ai.modelId ?? health.data.ai.detail}>
+        <span className="tabular shrink-0 whitespace-nowrap text-[11px] uppercase tracking-[0.06em] text-faint" title={health.data.ai.modelId ?? health.data.ai.detail}>
           AI {health.data.ai.observer} · DB {health.data.db.adapter}
         </span>
       )}

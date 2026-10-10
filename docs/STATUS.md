@@ -11,8 +11,8 @@ States: WORKING (verified, evidence named) · PARTIAL · BLOCKED · NOT STARTED.
 | Rekognition (live observer) | WORKING | `npm run verify:bedrock` DetectLabels ok 07:36Z; one synthetic PNG through `POST /api/evidence` on the production build 07:45Z returned `source: rekognition` in 378 ms (correctly judged "no hazard"); `/api/health` then showed AI PASS |
 | Supabase + PostGIS | PARTIAL | Project `aquapulse` (ap-south-1) created; migration `init` applied; `aquapulse_health()` returns PostGIS 3.3, 20 tables; RLS on all 19 app tables; `ST_Distance` on geography returns meters (0.01° lng = 1085 m). Verified through the Supabase connector 2026-10-10. App-side check (`npm run verify:db`) BLOCKED until `SUPABASE_SERVICE_ROLE_KEY` is in `.env.local` |
 | Engine (flood, scarcity, interventions, auction, evidence, memory) | WORKING | 25 vitest tests green; flagship at +30: 3,822 → 190 with D104 + P02 |
-| Command center UI + map | WORKING | Builder verified in a browser at 1440x900 and 1920x1080, zero console errors; orchestrator reviewed screenshots. Photo-upload success path, basemap-offline fallback and reduced motion not yet exercised in the browser |
-| Demo scenarios + reset | WORKING | Three scenarios play to the end in the browser; determinism asserted in tests. Network-blocked rehearsal not done yet |
+| Command center UI + map | WORKING | Builder verified in a browser at 1440x900 and 1920x1080, zero console errors; orchestrator reviewed screenshots. Basemap-offline fallback verified. Photo-upload success path in the browser and reduced motion not yet exercised |
+| Demo scenarios + reset | WORKING | Three scenarios play to the end in the browser; determinism asserted in tests. Network-blocked rehearsal of the flood scenario passed |
 | API routes + webhooks | PARTIAL | Health, evidence, ask verified over HTTP; webhook auth and Twilio signature verified by the offline self-check only (`npm run selfcheck`). With Supabase on, `/webhooks/verification` and `/webhooks/action-complete` return 404 because the app does not persist incidents or interventions |
 | Twilio | UNVERIFIED | No credentials; alerts use the labelled demo transport |
 | Ask AquaPulse | PARTIAL | Template answers from simulation data (labelled); no LLM while Bedrock is blocked |
@@ -26,3 +26,14 @@ States: WORKING (verified, evidence named) · PARTIAL · BLOCKED · NOT STARTED.
 - Design review 1 · tagline hidden at 1440 · High · act · shown from 1280 px
 - Design review 1 · risk trajectory sparkline nearly flat (axis from 0) · Medium · open
 - Design review 1 · calm-state cells very faint · Medium · open
+- Code review (M3) · rate limit keyed on client-supplied `x-forwarded-for` · High · act · prefers platform-set `x-real-ip`; still per instance
+- Code review · `/api/health` uncached DB and Lambda calls · Medium · act · whole response cached 30 s
+- Code review · Lambda error codes collapsed to 502 on the web host · Medium · act · code passed through; Lambda uses the same status map
+- Code review · bad image returned 502 with raw AWS text · Medium · act · 415 with a fixed message (verified with a truncated PNG)
+- Code review · Twilio route dropped `analysisError` · Medium · act · logged
+- Code review · Twilio media redirect to an S3 host fails the allowlist · Medium · skip · unverified claim and Twilio itself is UNVERIFIED; widening the allowlist to S3 weakens the SSRF guard. Revisit with real Twilio credentials
+- Code review · `sendAlert` has no idempotency key; retry can resend · Medium · skip · Twilio not configured; demo transport only. Must fix before real sends
+- Code review · AI health uses per-instance memory, may read UNVERIFIED on serverless · Medium · skip · errs toward under-claiming
+- Code review · memory vs Supabase adapters differ on verification/action-complete · Medium · open · same gap as the API row above
+- Code review · duplicated helpers between Lambda handler and routes · Nit · skip
+- Demo gate · network-blocked rehearsal of the flood scenario on the production build · passed 2026-10-10 (basemap offline tag shown, cells render)

@@ -69,7 +69,7 @@ export async function handler(event: Event): Promise<Result> {
     return reply(200, await route(path, body));
   } catch (err) {
     if (err instanceof Reject) return fail(err.status, err.code, err.message);
-    if (err instanceof AiError) return fail(err.code === "THROTTLED" ? 429 : 502, `AI_${err.code}`, err.fix);
+    if (err instanceof AiError) return fail(({ THROTTLED: 429, CREDENTIALS: 503, NO_OBSERVER: 503, UNSUPPORTED_IMAGE: 415 } as Record<string, number>)[err.code] ?? 502, `AI_${err.code}`, err.fix);
     console.error(JSON.stringify({ requestId, error: err instanceof Error ? err.name : "unknown" }));
     return fail(500, "INTERNAL", "Unexpected server error.");
   }

@@ -140,7 +140,10 @@ async function viaRekognition(image: ImageInput): Promise<EvidenceAnalysis> {
   } catch (err) {
     const c = classifyBedrockError(err);
     logOp({ service: "rekognition", op: "DetectLabels", durationMs: Date.now() - start, status: "error", observer: "rekognition", code: c.code, errorName: c.name });
-    throw new AiError(c.code, c.fix);
+    if (/^(InvalidImageFormat|ImageTooLarge|InvalidParameter)Exception$/.test(c.name))
+      throw new AiError("UNSUPPORTED_IMAGE", "Amazon Rekognition could not read this image; resend it as a valid JPEG or PNG under 4 MB.");
+    // Unclassified AWS errors: log has the detail; the caller gets a fixed message.
+    throw new AiError(c.code, c.code === "UNKNOWN" ? "The image observer failed; try again." : c.fix);
   }
 }
 

@@ -195,7 +195,8 @@ export async function remote<T>(path: "/evidence" | "/ask" | "/health", body: un
     const json: unknown = await res.json().catch(() => null);
     if (!res.ok) {
       const e = (json as { error?: { code?: string; message?: string } } | null)?.error;
-      throw new AiError("AI_ENDPOINT", `AI endpoint returned ${res.status}${e?.code ? ` ${e.code}: ${e.message ?? ""}` : ""}`.slice(0, 240));
+      if (e?.code?.startsWith("AI_")) throw new AiError(e.code.slice(3) as AiError["code"], (e.message ?? "").slice(0, 240));
+      throw new AiError("AI_ENDPOINT", `AI endpoint returned ${res.status}${e?.code ? ` ${e.code}` : ""}`);
     }
     const parsed = schema.safeParse(json);
     if (!parsed.success) throw new AiError("AI_ENDPOINT", "AI endpoint returned a body that does not match the contract.");

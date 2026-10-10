@@ -48,7 +48,8 @@ export function handle(route: string, fn: (req: Request, requestId: string) => P
 // ponytail: per-instance sliding window; behind several instances the real limit is N x this. Move to the DB or an edge limiter when that matters.
 const hits = new Map<string, number[]>();
 export function rateLimit(req: Request, max = 10, windowMs = 60_000) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
+  // x-real-ip is set by the host platform; a client can forge x-forwarded-for only where no proxy overwrites it (local runs).
+  const ip = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
   const now = Date.now();
   if (hits.size > 5000) hits.clear();
   const recent = (hits.get(ip) ?? []).filter((t) => now - t < windowMs);
