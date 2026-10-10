@@ -21,6 +21,8 @@ const SURFACE = "#0a0d10";
 // Extent of the Survey of India depiction, including the islands.
 const INDIA = new LngLatBounds([67.5, 6.2], [97.8, 37.4]);
 const FIT = { top: 60, bottom: 56, left: 268, right: 24 };
+/** Below this zoom a click selects a state; at or above it, a district. District names appear at the same point. */
+const STATE_ZOOM = 5.6;
 const ist = (iso: string | null | undefined, withDate = false) =>
   iso ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false, ...(withDate ? { day: "2-digit", month: "short" } : {}) }).format(new Date(iso)) + " IST" : "never";
 const ago = (iso: string | null | undefined, now: number) => {
@@ -38,6 +40,8 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [now, setNow] = useState(() => Date.now());
   const [selected, setSelected] = useState<string | null>(null);
+  /** State in focus: India → state → district. Set by clicking the map while zoomed out, the breadcrumb, or a district. */
+  const [stateSel, setStateSel] = useState<string | null>(null);
   const [hover, setHover] = useState<{ id: string; x: number; y: number; w: number } | null>(null);
   const [query, setQuery] = useState("");
   const data = load.status === "ok" ? load.data : null;
@@ -96,12 +100,12 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
             },
           },
           {
-            id: "state-label", type: "symbol", source: "states", maxzoom: 6.2,
+            id: "state-label", type: "symbol", source: "states", maxzoom: STATE_ZOOM + 0.6,
             layout: { "text-field": ["get", "shapeName"], "text-font": ["Noto Sans Regular"], "text-size": 10.5, "text-transform": "uppercase", "text-letter-spacing": 0.12, "text-max-width": 7 },
             paint: { "text-color": "#6b7885", "text-halo-color": SURFACE, "text-halo-width": 1.2 },
           },
           {
-            id: "district-label", type: "symbol", source: "districts", minzoom: 6.2,
+            id: "district-label", type: "symbol", source: "districts", minzoom: STATE_ZOOM + 0.6,
             layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-max-width": 7 },
             paint: { "text-color": "#8b98a5", "text-halo-color": SURFACE, "text-halo-width": 1.2 },
           },
@@ -141,7 +145,11 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     });
     m.on("click", "district-fill", (e) => {
       const f = e.features?.[0];
-      if (f) setSelected(String(f.properties.id));
+      if (!f) return;
+      // Zoomed out, a click picks the state and reveals its districts; zoomed in, it picks the district.
+      setStateSel(String(f.properties.state));
+      if (m.getZoom() >= STATE_ZOOM) setSelected(String(f.properties.id));
+      else setSelected(null);
     });
     return () => {
       m.remove();
@@ -168,13 +176,19 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     if (prev.current) m.setFeatureState({ source: "districts", id: prev.current }, { selected: false });
     prev.current = selected;
     if (!selected) {
-      m.fitBounds(INDIA, { padding: FIT, duration: 900 });
+      const members = stateSel ? DISTRICTS.filter((d) => d.state === stateSel) : [];
+      if (members.length) {
+        // Frame the state from its districts' positions, with a margin since these are centre points.
+        const b = members.reduce((acc, d) => acc.extend([d.lng, d.lat]), new LngLatBounds([members[0].lng, members[0].lat], [members[0].lng, members[0].lat]));
+        const pad = 0.7;
+        m.fitBounds([[b.getWest() - pad, b.getSouth() - pad], [b.getEast() + pad, b.getNorth() + pad]], { padding: { ...FIT, right: 384 }, duration: 1000, maxZoom: 7.5 });
+      } else m.fitBounds(INDIA, { padding: FIT, duration: 900 });
       return;
     }
     m.setFeatureState({ source: "districts", id: selected }, { selected: true });
     const d = BY_ID.get(selected);
     if (d) m.flyTo({ center: [d.lng, d.lat], zoom: Math.max(m.getZoom(), 6.8), duration: 1100, padding: { top: 60, bottom: 50, left: 260, right: 380 }, essential: true });
-  }, [selected, ready]);
+  }, [selected, stateSel, ready]);
 
   const sel = selected ? BY_ID.get(selected) : null;
   const selRisk = selected ? data?.districts[selected] : undefined;
@@ -183,6 +197,13 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     const q = query.trim().toLowerCase();
     return q.length < 2 ? [] : DISTRICTS.filter((d) => `${d.name} ${d.state}`.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q)).slice(0, 7);
   }, [query]);
+  const stateRows = useMemo(() => {
+    if (!stateSel || !data) return [];
+    return DISTRICTS.filter((d) => d.state === stateSel && (data.districts[d.id]?.risk ?? 0) > 0)
+      .map((d) => ({ d, r: data.districts[d.id] }))
+      .sort((a, b) => b.r.risk - a.r.risk);
+  }, [stateSel, data]);
+  const stateUnplaced = useMemo(() => (stateSel && data ? data.alerts.filter((a) => a.state === stateSel && a.districtIds.length === 0).length : 0), [stateSel, data]);
   const hov = hover ? BY_ID.get(hover.id) : null;
   const hovRisk = hover ? data?.districts[hover.id] : undefined;
   const src = data?.source;
@@ -236,7 +257,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
             <ul className="mt-1">
               {matches.map((d) => (
                 <li key={d.id}>
-                  <button type="button" className="flex w-full items-baseline justify-between gap-2 py-1 text-left text-[13px] text-muted hover:text-ink" onClick={() => { setSelected(d.id); setQuery(""); }}>
+                  <button type="button" className="flex w-full items-baseline justify-between gap-2 py-1 text-left text-[13px] text-muted hover:text-ink" onClick={() => { setStateSel(d.state); setSelected(d.id); setQuery(""); }}>
                     <span className="truncate text-ink">{d.name}</span>
                     <span className="shrink-0 text-[11px] text-faint">{d.state}</span>
                   </button>
@@ -247,17 +268,26 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         </div>
 
         <div className="border-t border-hairline px-4 py-3">
-          <Label>Current conditions</Label>
+          <Label>Current water status</Label>
           {data ? (
-            <dl className="mt-2 space-y-1.5 text-[13px]">
-              <Stat n={data.summary.districtsUnderWaterAlert} label="districts under a water-related alert" strong />
-              <Stat n={data.summary.floodAlerts} label="flood and river alerts" />
-              <Stat n={data.summary.rainAlerts} label="rain and storm alerts" />
-              <Stat n={data.summary.heatAlerts} label="heat alerts" />
-              <Stat n={data.summary.districtsWithRainNowcast} label="districts with a rain nowcast" />
-              <Stat n={data.summary.statesWithAlerts} label="states and UTs with active alerts" />
-              {data.summary.unlocatedAlerts > 0 && <p className="pt-1 text-[11px] leading-snug text-faint">{data.summary.unlocatedAlerts} active alerts name no district we could match and are not on the map.</p>}
-            </dl>
+            <>
+              <p className="mt-2 flex items-baseline gap-2">
+                <span className="tabular text-[32px] font-medium leading-none tracking-tight text-ink">{data.summary.districtsUnderWaterAlert}</span>
+                <span className="text-[13px] leading-snug text-muted">districts need attention</span>
+              </p>
+              <p className="mt-2 text-[11px] leading-snug text-faint">Districts with an active official flood, river, rain or heat alert, or a rain nowcast.</p>
+              <details className="mt-2 text-[13px]">
+                <summary className="cursor-pointer text-[11px] uppercase tracking-[0.08em] text-muted hover:text-ink">Details</summary>
+                <dl className="mt-2 space-y-1.5">
+                  <Stat n={data.summary.floodAlerts} label="flood and river alerts" />
+                  <Stat n={data.summary.rainAlerts} label="rain and storm alerts" />
+                  <Stat n={data.summary.heatAlerts} label="heat alerts" />
+                  <Stat n={data.summary.districtsWithRainNowcast} label="districts with a rain nowcast" />
+                  <Stat n={data.summary.statesWithAlerts} label="states and UTs with active alerts" />
+                  {data.summary.unlocatedAlerts > 0 && <p className="pt-1 text-[11px] leading-snug text-faint">{data.summary.unlocatedAlerts} active alerts name no district we could match and are not on the map.</p>}
+                </dl>
+              </details>
+            </>
           ) : (
             <p className="mt-2 text-[13px] text-faint">{load.status === "error" ? load.detail : "Loading…"}</p>
           )}
@@ -265,11 +295,11 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
 
         {data && data.hotspots.length > 0 && (
           <div className="border-t border-hairline py-3">
-            <Label className="px-4">Current priority areas</Label>
+            <Label className="px-4">Where to look first</Label>
             <ol className="mt-1">
               {data.hotspots.map((h) => (
                 <li key={h.districtId}>
-                  <button type="button" onClick={() => setSelected(h.districtId)} className={`flex w-full items-baseline gap-2 border-l-2 px-4 py-1.5 text-left hover:bg-panel-raised ${selected === h.districtId ? "border-ink bg-panel-raised" : "border-transparent"}`}>
+                  <button type="button" onClick={() => { setStateSel(h.state); setSelected(h.districtId); }} className={`flex w-full items-baseline gap-2 border-l-2 px-4 py-1.5 text-left hover:bg-panel-raised ${selected === h.districtId ? "border-ink bg-panel-raised" : "border-transparent"}`}>
                     <span className="tabular w-6 shrink-0 text-[13px] font-medium" style={{ color: bandCss(h.risk, "flood") }}>{h.risk}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] text-ink">{h.name}</span>
@@ -305,13 +335,13 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
               <h2 className="text-[20px] font-medium leading-tight text-ink">{sel.name}</h2>
               <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-muted">{sel.state}</p>
             </div>
-            <button type="button" className={iconBtn} onClick={() => setSelected(null)} aria-label="Close district">
+            <button type="button" className={iconBtn} onClick={() => setSelected(null)} aria-label="Back to state">
               <X size={14} aria-hidden />
             </button>
           </div>
 
           <div className="border-t border-hairline px-5 py-4">
-            <Label>AquaPulse water risk</Label>
+            <Label>Water risk</Label>
             {selRisk && selRisk.risk > 0 ? (
               <>
                 <p className="mt-1 flex items-baseline gap-2">
@@ -320,9 +350,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
                     {riskBand(selRisk.risk).glyph} {riskBand(selRisk.risk).label}
                   </span>
                 </p>
-                <p className="mt-2 text-[11px] text-muted">
-                  Confidence {Math.round(selRisk.confidence * 100)}% · coverage {selRisk.coverage.have} of {selRisk.coverage.of} inputs
-                </p>
+
               </>
             ) : (
               <p className="mt-2 text-[13px] leading-snug text-muted">No water-related official alert or rain nowcast is placed on this district right now. Conditions beyond those two feeds are unknown to AquaPulse.</p>
@@ -331,8 +359,11 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
           </div>
 
           {selRisk && (
-            <div className="border-t border-hairline px-5 py-4">
-              <Label>Current signals</Label>
+            <details className="border-t border-hairline px-5 py-4">
+              <summary className="cursor-pointer text-[11px] uppercase tracking-[0.08em] text-muted hover:text-ink">Technical details</summary>
+              <p className="mt-3 text-[11px] text-muted">
+                Confidence {Math.round(selRisk.confidence * 100)}% · {selRisk.coverage.have} of {selRisk.coverage.of} inputs connected
+              </p>
               <dl className="mt-2 text-[13px]">
                 {selRisk.factors.map((f) => (
                   <div key={f.key} className="flex items-baseline justify-between gap-3 border-b border-hairline py-1.5 last:border-b-0">
@@ -344,7 +375,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
                   </div>
                 ))}
               </dl>
-            </div>
+            </details>
           )}
 
           {selRisk && selRisk.why.length > 0 && (
@@ -390,6 +421,44 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         </aside>
       )}
 
+      {stateSel && !sel && (
+        <aside aria-label={`${stateSel} state`} className="absolute bottom-9 right-0 top-10 z-10 flex w-[360px] flex-col overflow-y-auto border-l border-hairline bg-panel">
+          <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
+            <div>
+              <h2 className="text-[20px] font-medium leading-tight text-ink">{stateSel}</h2>
+              <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-muted">State · {DISTRICTS.filter((d) => d.state === stateSel).length} districts</p>
+            </div>
+            <button type="button" className={iconBtn} onClick={() => setStateSel(null)} aria-label="Back to India">
+              <X size={14} aria-hidden />
+            </button>
+          </div>
+          <div className="border-t border-hairline px-5 py-4">
+            <p className="flex items-baseline gap-2">
+              <span className="tabular text-[32px] font-medium leading-none tracking-tight text-ink">{stateRows.length}</span>
+              <span className="text-[13px] text-muted">{stateRows.length === 1 ? "district needs attention" : "districts need attention"}</span>
+            </p>
+            {stateRows.length === 0 && <p className="mt-2 text-[13px] leading-snug text-muted">No water-related official alert or rain nowcast is placed on a district of this state right now. Conditions beyond those two feeds are unknown to AquaPulse.</p>}
+            {stateUnplaced > 0 && <p className="mt-2 text-[11px] leading-snug text-faint">{stateUnplaced} more active alert{stateUnplaced === 1 ? "" : "s"} for this state name no district we could match.</p>}
+          </div>
+          {stateRows.length > 0 && (
+            <ol className="border-t border-hairline py-2">
+              {stateRows.map(({ d, r }) => (
+                <li key={d.id}>
+                  <button type="button" onClick={() => setSelected(d.id)} className="flex w-full items-baseline gap-3 px-5 py-2 text-left hover:bg-panel-raised">
+                    <span className="tabular w-7 shrink-0 text-[15px] font-medium" style={{ color: bandCss(r.risk, "flood") }}>{r.risk}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] text-ink">{d.name}</span>
+                      <span className="block truncate text-[11px] text-faint">{r.why[0]}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+          <p className="mt-auto border-t border-hairline px-5 py-4 text-[11px] leading-snug text-faint">Click a district on the map for its alerts and the reasons behind its score.</p>
+        </aside>
+      )}
+
       {hov && hover && (
         <div className="pointer-events-none absolute z-20 w-[230px] border border-hairline bg-panel px-3 py-2 text-[11px]" style={{ left: Math.min(hover.x + 14, hover.w - 250), top: hover.y + 14 }}>
           <p className="text-[13px] text-ink">{hov.name}</p>
@@ -414,12 +483,16 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
 
       <footer className="absolute inset-x-0 bottom-0 z-10 flex h-9 items-center gap-4 border-t border-hairline bg-panel px-4 text-[11px] text-muted">
         <nav aria-label="Location" className="flex items-center gap-1.5">
-          <button type="button" className={sel ? "hover:text-ink" : "text-ink"} onClick={() => setSelected(null)}>India</button>
+          <button type="button" className={stateSel || sel ? "hover:text-ink" : "text-ink"} onClick={() => { setSelected(null); setStateSel(null); }}>India</button>
+          {(stateSel || sel) && (
+            <>
+              <span className="text-faint">/</span>
+              <button type="button" className={sel ? "hover:text-ink" : "text-ink"} onClick={() => setSelected(null)}>{sel?.state ?? stateSel}</button>
+            </>
+          )}
           {sel && (
             <>
-              <span className="text-faint">›</span>
-              <span>{sel.state}</span>
-              <span className="text-faint">›</span>
+              <span className="text-faint">/</span>
               <span className="text-ink">{sel.name}</span>
             </>
           )}
