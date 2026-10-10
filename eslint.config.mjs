@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored copy of the MapLibre worker (Turbopack cannot resolve it from node_modules).
+    "public/**",
+    "infra/ai-lambda/dist/**",
   ]),
 ]);
 
