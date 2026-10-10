@@ -1,0 +1,51 @@
+{
+  "name": "aquapulse",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "doctor": "tsx scripts/doctor.ts",
+    "verify:aws": "tsx scripts/verify-aws.ts",
+    "verify:bedrock": "tsx scripts/verify-bedrock.ts",
+    "verify:db": "tsx scripts/verify-db.ts",
+    "demo:reset": "tsx scripts/reset-demo.ts",
+    "check": "tsc --noEmit && eslint && vitest run && next build"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock": "^3.1149.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1149.0",
+    "@aws-sdk/client-rekognition": "^3.1149.0",
+    "@aws-sdk/client-sts": "^3.1149.0",
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/geo-layers": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/mapbox": "^9.4.0",
+    "@deck.gl/react": "^9.4.0",
+    "@supabase/supabase-js": "^2.117.3",
+    "h3-js": "^4.5.0",
+    "lucide-react": "^1.55.0",
+    "maplibre-gl": "^6.13.0",
+    "motion": "^14.1.0",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^5.0.3"
+  }
+}
