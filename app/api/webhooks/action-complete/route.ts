@@ -1,11 +1,10 @@
 import { repo } from "@/lib/db";
 import { ActionCompleteWebhookSchema } from "@/lib/schemas/api";
-import { handle, HttpError, json, readJson, requireWebhookSecret } from "../../_lib";
+import { handle, json, readJson, requireWebhookSecret } from "../../_lib";
 
 export const POST = handle("webhooks/action-complete", async (req, requestId) => {
   requireWebhookSecret(req);
   const c = await readJson(req, ActionCompleteWebhookSchema);
-  const recorded = await repo().recordActionCompletion(c);
-  if (!recorded) throw new HttpError(404, "INTERVENTION_NOT_FOUND", `No intervention ${c.bundleId} for incident ${c.incidentId} is in the database.`);
+  await repo().recordActionCompletion(c);
   return json(requestId, { recorded: true, adapter: repo().adapter });
 });

@@ -27,18 +27,20 @@ export type EvidenceRow = {
   receivedAt: string;
 };
 export type MediaMeta = { contentType: string; sizeBytes: number; sha256: string; sourceHost?: string };
-export type NewAlert = { incidentId: string; audience: string; body: string; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed"; providerId?: string };
+export type NewAlert = { incidentId: string; audience: string; body: string; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed"; providerId?: string; idempotencyKey?: string };
+export type AlertClaim = { id: string; duplicate: boolean; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed" };
 
 export type Repo = {
   adapter: "supabase" | "memory";
   /** Idempotent on messageId: a duplicate returns the existing row and `duplicate: true`. */
   insertEvidence(e: NewEvidence): Promise<{ row: EvidenceRow; duplicate: boolean }>;
   attachAnalysis(evidenceId: string, analysis: EvidenceAnalysis, media?: MediaMeta): Promise<void>;
-  recordAlert(a: NewAlert): Promise<{ id: string }>;
-  /** null = the incident is not in the database (verification_requests.incident_id is a required FK). */
-  recordVerification(v: { incidentId: string; lat: number; lng: number; radiusM: number; question: string }): Promise<{ id: string } | null>;
-  /** false = no matching intervention row to complete. */
-  recordActionCompletion(c: { incidentId: string; bundleId: string; completedAt: string }): Promise<boolean>;
+  /** Idempotent on idempotencyKey: a second call with the same key returns the first row and `duplicate: true`. */
+  recordAlert(a: NewAlert): Promise<AlertClaim>;
+  updateAlert(id: string, patch: { status: "sent" | "failed"; providerId?: string }): Promise<void>;
+  recordVerification(v: { incidentId: string; lat: number; lng: number; radiusM: number; question: string }): Promise<{ id: string }>;
+  /** Marks the intervention completed, creating its row if the engine-side intervention was never persisted. */
+  recordActionCompletion(c: { incidentId: string; bundleId: string; completedAt: string; note?: string }): Promise<void>;
   listRecentEvidence(limit?: number): Promise<EvidenceRow[]>;
   health(): Promise<HealthResponse["db"]>;
 };
@@ -70,7 +72,6 @@ const toRow = (r: EvidenceDb): EvidenceRow => ({
   id: r.id, messageId: r.message_id, channel: r.channel, reporterId: r.reporter_id ?? undefined,
   body: r.body, analysis: r.analysis ?? undefined, receivedAt: r.received_at,
 });
-const FK_VIOLATION = "23503";
 const UNIQUE_VIOLATION = "23505";
 
 function supabaseRepo(db: SupabaseClient): Repo {
@@ -109,12 +110,20 @@ function supabaseRepo(db: SupabaseClient): Repo {
       if (m.error) throw new DbError("insert media", m.error);
     },
     async recordAlert(a) {
-      const row = { incident_id: a.incidentId as string | null, audience: a.audience, body: a.body, transport: a.transport, status: a.status, provider_id: a.providerId ?? null };
-      let r = await db.from("alerts").insert(row).select("id").single();
-      // ponytail: incidents live in the browser engine, so the FK usually has no target; keep the alert, drop the link.
-      if (r.error?.code === FK_VIOLATION) r = await db.from("alerts").insert({ ...row, incident_id: null }).select("id").single();
+      const row = { incident_id: a.incidentId, audience: a.audience, body: a.body, transport: a.transport, status: a.status, provider_id: a.providerId ?? null, idempotency_key: a.idempotencyKey ?? null };
+      const r = await db.from("alerts").insert(row).select("id").single();
+      if (r.error?.code === UNIQUE_VIOLATION && a.idempotencyKey) {
+        const prev = await db.from("alerts").select("id, transport, status").eq("idempotency_key", a.idempotencyKey).single();
+        if (prev.error) throw new DbError("read alert", prev.error);
+        const p = prev.data as { id: string; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed" };
+        return { id: p.id, duplicate: true, transport: p.transport, status: p.status };
+      }
       if (r.error) throw new DbError("insert alert", r.error);
-      return { id: (r.data as { id: string }).id };
+      return { id: (r.data as { id: string }).id, duplicate: false, transport: a.transport, status: a.status };
+    },
+    async updateAlert(id, patch) {
+      const { error } = await db.from("alerts").update({ status: patch.status, provider_id: patch.providerId ?? null }).eq("id", id);
+      if (error) throw new DbError("update alert", error);
     },
     async recordVerification(v) {
       const { data, error } = await db
@@ -122,20 +131,15 @@ function supabaseRepo(db: SupabaseClient): Repo {
         .insert({ incident_id: v.incidentId, location: ewkt(v.lng, v.lat), radius_m: v.radiusM, question: v.question })
         .select("id")
         .single();
-      if (error?.code === FK_VIOLATION) return null;
       if (error) throw new DbError("insert verification", error);
       return { id: (data as { id: string }).id };
     },
     async recordActionCompletion(c) {
-      // ponytail: the webhook's `note` has no column in 0001_init.sql and is not stored.
-      const { data, error } = await db
+      // Interventions are created by the engine in the browser, so the row may not exist yet: upsert by id.
+      const { error } = await db
         .from("interventions")
-        .update({ status: "completed", completed_at: c.completedAt })
-        .eq("id", c.bundleId)
-        .eq("incident_id", c.incidentId)
-        .select("id");
+        .upsert({ id: c.bundleId, incident_id: c.incidentId, status: "completed", completed_at: c.completedAt, note: c.note ?? null }, { onConflict: "id" });
       if (error) throw new DbError("complete intervention", error);
-      return (data ?? []).length > 0;
     },
     async listRecentEvidence(limit = 20) {
       const { data, error } = await db.from("evidence_events").select(EVIDENCE_COLS).order("received_at", { ascending: false }).limit(limit);
@@ -157,6 +161,7 @@ function memoryRepo(): Repo {
   // ponytail: per-process state, lost on restart and not shared between instances. Supabase is the durable adapter.
   const evidence = new Map<string, EvidenceRow>();
   const log: { kind: "alert" | "verification" | "action"; id: string; data: unknown }[] = [];
+  const alerts = new Map<string, AlertClaim>();
   const record = (kind: (typeof log)[number]["kind"], data: unknown) => {
     const id = randomUUID();
     log.push({ kind, id, data });
@@ -177,9 +182,18 @@ function memoryRepo(): Repo {
     async attachAnalysis(evidenceId, analysis) {
       for (const row of evidence.values()) if (row.id === evidenceId) row.analysis = analysis;
     },
-    recordAlert: async (a) => record("alert", a),
+    async recordAlert(a) {
+      const prev = a.idempotencyKey ? alerts.get(a.idempotencyKey) : undefined;
+      if (prev) return { ...prev, duplicate: true };
+      const claim: AlertClaim = { id: record("alert", a).id, duplicate: false, transport: a.transport, status: a.status };
+      if (a.idempotencyKey) alerts.set(a.idempotencyKey, claim);
+      return claim;
+    },
+    async updateAlert(id, patch) {
+      for (const c of alerts.values()) if (c.id === id) c.status = patch.status;
+    },
     recordVerification: async (v) => record("verification", v),
-    recordActionCompletion: async (c) => Boolean(record("action", c)),
+    recordActionCompletion: async (c) => void record("action", c),
     async listRecentEvidence(limit = 20) {
       return [...evidence.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, limit);
     },

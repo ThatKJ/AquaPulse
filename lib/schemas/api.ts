@@ -81,6 +81,8 @@ export const AlertWebhookSchema = z.object({
   audience: z.string().max(120),
   body: z.string().max(600),
   to: z.array(z.string().max(32)).max(50).optional(),
+  /** A retry with the same key returns the first result and sends nothing. Defaults to a hash of the payload. */
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 /** POST /api/webhooks/action-complete — a field crew reports an action finished. */

@@ -30,6 +30,9 @@ Supabase project `aquapulse` (region ap-south-1), Postgres with PostGIS 3.3. Sch
 | `verification_requests` | Requests for nearby confirmation |
 | `infrastructure_history` | Multi-year failure memory per asset |
 
+## Migration 0002
+`verification_requests`, `interventions` and `alerts` reference incidents by plain id (no foreign key), because incidents are created by the in-browser engine and not yet persisted. `alerts.idempotency_key` is unique so a webhook retry cannot send twice. `interventions.note` stores the action-complete note.
+
 ## Functions (service role only)
 - `incidents_near(lng, lat, radius_m)`: incidents within a radius in meters, nearest first.
 - `aquapulse_health()`: PostGIS version and row counts, used by `npm run verify:db` and `/api/health`.

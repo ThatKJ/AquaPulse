@@ -13,7 +13,7 @@ States: WORKING (verified, evidence named) · PARTIAL · BLOCKED · NOT STARTED.
 | Engine (flood, scarcity, interventions, auction, evidence, memory) | WORKING | 25 vitest tests green; flagship at +30: 3,822 → 190 with D104 + P02 |
 | Command center UI + map | WORKING | Builder verified in a browser at 1440x900 and 1920x1080, zero console errors; orchestrator reviewed screenshots. Basemap-offline fallback verified. Photo upload verified in the browser (live Rekognition result, badged, "Add as report" offered; the add step itself not clicked). Reduced motion not exercised |
 | Demo scenarios + reset | WORKING | Three scenarios play to the end in the browser; determinism asserted in tests. Network-blocked rehearsal of the flood scenario passed |
-| API routes + webhooks | PARTIAL | Health, evidence, ask verified over HTTP; webhook auth and Twilio signature verified by the offline self-check only (`npm run selfcheck`). With Supabase on, `/webhooks/verification` and `/webhooks/action-complete` return 404 because the app does not persist incidents or interventions |
+| API routes + webhooks | PARTIAL | Health, evidence, ask verified over HTTP; webhook auth and Twilio signature verified by the offline self-check only (`npm run selfcheck`). Verification and action-complete no longer depend on persisted incidents (migration `0002`), but their Supabase path has not been exercised |
 | Twilio | UNVERIFIED | No credentials; alerts use the labelled demo transport |
 | Ask AquaPulse | PARTIAL | Template answers from simulation data (labelled); no LLM while Bedrock is blocked |
 | AI Lambda | NOT STARTED | Packaged and bundles locally; not deployed (needs approval to create the stack and role) |
@@ -37,3 +37,9 @@ States: WORKING (verified, evidence named) · PARTIAL · BLOCKED · NOT STARTED.
 - Code review · memory vs Supabase adapters differ on verification/action-complete · Medium · open · same gap as the API row above
 - Code review · duplicated helpers between Lambda handler and routes · Nit · skip
 - Demo gate · network-blocked rehearsal of the flood scenario on the production build · passed 2026-10-10 (basemap offline tag shown, cells render)
+- Security review (M6, done by reading the server code; the built-in `/security-review` only covers unpushed diffs) · no Critical or High finding. Upload validation, webhook auth, secret handling, SSRF guard and RLS read as intended
+- Security · alert retry could send twice · Medium · act · the alert row is claimed by idempotency key before sending; a retry returns the first result (checked with the memory adapter; Supabase path not exercised)
+- Security · Twilio media redirect to S3 rejected · Medium · act · a redirect hop (never the first URL) may go to Twilio's own `media.twiliocdn.com` bucket only; other buckets and hosts rejected (unit-checked; UNVERIFIED against live Twilio)
+- Security · webhooks 404 with Supabase because incidents are not persisted · Medium · act · migration `0002` drops those foreign keys; verification and action-complete now record (Supabase path not exercised: no service key in `.env.local`)
+- Security · reporter phone hash was unsalted SHA-256 · Medium · act · HMAC keyed with the server secret
+- Security · AI health state is per instance on serverless · Low · skip · can only under-report

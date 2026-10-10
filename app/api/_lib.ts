@@ -1,6 +1,6 @@
 // Shared plumbing for the route handlers: request ids, error envelope, logging, auth, rate limit,
 // the host-allowlisted media fetcher and the report ingestion used by both report webhooks.
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { AiError, logOp, safeEqual, sniffImageType } from "@/lib/aws/clients";
 import { analyzeEvidence } from "@/lib/aws/evidence";
@@ -99,10 +99,16 @@ export function assertImage(bytes: Uint8Array, declaredType: string) {
 
 // ---------- media fetch (SSRF guard) ----------
 
-export function mediaUrlAllowed(u: URL): boolean {
+/** `redirected` = this URL came from a redirect issued by an allowed host, never from the caller. */
+export function mediaUrlAllowed(u: URL, redirected = false): boolean {
+  if (u.protocol !== "https:" || u.port !== "" || u.username !== "" || u.password !== "") return false;
+  if (u.hostname === "api.twilio.com" || u.hostname.endsWith(".twiliocdn.com")) return true;
+  // Twilio redirects media to its own S3 bucket. Only that bucket, and only as a redirect target.
+  // UNVERIFIED against live Twilio: written from Twilio's documented behaviour.
   return (
-    u.protocol === "https:" && u.port === "" && u.username === "" && u.password === "" &&
-    (u.hostname === "api.twilio.com" || u.hostname.endsWith(".twiliocdn.com"))
+    redirected &&
+    ((/^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(u.hostname) && u.pathname.startsWith("/media.twiliocdn.com/")) ||
+      /^media\.twiliocdn\.com\.s3[.-][a-z0-9.-]*amazonaws\.com$/.test(u.hostname))
   );
 }
 
@@ -117,7 +123,7 @@ export async function fetchTwilioMedia(rawUrl: string): Promise<{ bytes: Uint8Ar
     throw bad("mediaUrl is not a valid URL.");
   }
   for (let hop = 0; hop <= 3; hop++) {
-    if (!mediaUrlAllowed(url)) throw bad("Media can only be fetched from https://api.twilio.com or *.twiliocdn.com.");
+    if (!mediaUrlAllowed(url, hop > 0)) throw bad("Media can only be fetched from Twilio hosts.");
     const headers: Record<string, string> = {};
     // Credentials go to api.twilio.com only, never to a redirect target.
     if (url.hostname === "api.twilio.com" && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN)
@@ -191,7 +197,7 @@ export async function ingestReport(r: {
   const { row, duplicate } = await repo().insertEvidence({
     messageId: r.messageId,
     channel: isWhatsApp ? "whatsapp" : "sms",
-    phoneHash: phone ? sha256Hex(phone) : undefined,
+    phoneHash: phone ? createHmac("sha256", serverEnv().WEBHOOK_SECRET ?? "aquapulse").update(phone).digest("hex") : undefined,
     body: r.text,
     lat: r.lat,
     lng: r.lng,
