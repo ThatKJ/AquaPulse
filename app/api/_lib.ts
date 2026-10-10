@@ -49,7 +49,8 @@ export function handle(route: string, fn: (req: Request, requestId: string) => P
 const hits = new Map<string, number[]>();
 export function rateLimit(req: Request, max = 10, windowMs = 60_000) {
   // x-real-ip is set by the host platform; a client can forge x-forwarded-for only where no proxy overwrites it (local runs).
-  const ip = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
+  // Counted per route: the console polls /api/reports, which must not use up the budget of /api/ask or /api/evidence.
+  const ip = `${new URL(req.url).pathname}|${req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local"}`;
   const now = Date.now();
   if (hits.size > 5000) hits.clear();
   const recent = (hits.get(ip) ?? []).filter((t) => now - t < windowMs);

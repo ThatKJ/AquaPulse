@@ -27,6 +27,9 @@ export type EvidenceRow = {
   receivedAt: string;
 };
 export type MediaMeta = { contentType: string; sizeBytes: number; sha256: string; sourceHost?: string };
+/** A report that arrived from outside (webhook), as the console needs it. No reporter identity. */
+export type LiveReport = { id: string; channel: NewEvidence["channel"]; text: string; receivedAt: string; lat?: number; lng?: number; analysis?: EvidenceAnalysis };
+
 export type NewAlert = { incidentId: string; audience: string; body: string; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed"; providerId?: string; idempotencyKey?: string };
 export type AlertClaim = { id: string; duplicate: boolean; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed" };
 
@@ -44,6 +47,8 @@ export type Repo = {
   /** Mirror engine state. Idempotent: rows are upserted by their engine ids. Returns row counts written. */
   syncState(s: StateSync): Promise<{ incidents: number; evidence: number; interventions: number }>;
   listRecentEvidence(limit?: number): Promise<EvidenceRow[]>;
+  /** Newest first. Excludes rows mirrored from the engine. */
+  listLiveReports(limit?: number): Promise<LiveReport[]>;
   health(): Promise<HealthResponse["db"]>;
 };
 
@@ -174,6 +179,13 @@ function supabaseRepo(db: SupabaseClient): Repo {
       }
       return { incidents: s.incidents.length, evidence: s.evidence.length, interventions: s.interventions.length };
     },
+    async listLiveReports(limit = 20) {
+      const { data, error } = await db.rpc("recent_live_reports", { max_rows: limit });
+      if (error) throw new DbError("list live reports", error);
+      return ((data ?? []) as { id: string; channel: NewEvidence["channel"]; body: string; received_at: string; lng: number | null; lat: number | null; analysis: EvidenceAnalysis | null }[]).map((r) => ({
+        id: r.id, channel: r.channel, text: r.body, receivedAt: r.received_at, lat: r.lat ?? undefined, lng: r.lng ?? undefined, analysis: r.analysis ?? undefined,
+      }));
+    },
     async listRecentEvidence(limit = 20) {
       const { data, error } = await db.from("evidence_events").select(EVIDENCE_COLS).order("received_at", { ascending: false }).limit(limit);
       if (error) throw new DbError("list evidence", error);
@@ -196,6 +208,7 @@ function memoryRepo(): Repo {
   const log: { kind: "alert" | "verification" | "action"; id: string; data: unknown }[] = [];
   const alerts = new Map<string, AlertClaim>();
   const mirror = new Map<string, unknown>();
+  const where = new Map<string, { lat?: number; lng?: number }>();
   const record = (kind: (typeof log)[number]["kind"], data: unknown) => {
     const id = randomUUID();
     log.push({ kind, id, data });
@@ -211,6 +224,7 @@ function memoryRepo(): Repo {
         reporterId: e.phoneHash ? reporterId(e.phoneHash) : undefined, receivedAt: e.receivedAt ?? new Date().toISOString(),
       };
       evidence.set(e.messageId, row);
+      where.set(row.id, { lat: e.lat, lng: e.lng });
       return { row, duplicate: false };
     },
     async attachAnalysis(evidenceId, analysis) {
@@ -233,6 +247,10 @@ function memoryRepo(): Repo {
       for (const e of s.evidence) mirror.set(`evidence:${e.id}`, e);
       for (const r of s.interventions) mirror.set(`intervention:${r.id}`, r);
       return { incidents: s.incidents.length, evidence: s.evidence.length, interventions: s.interventions.length };
+    },
+    async listLiveReports(limit = 20) {
+      return [...evidence.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, limit)
+        .map((r) => ({ id: r.id, channel: r.channel, text: r.body, receivedAt: r.receivedAt, ...where.get(r.id), analysis: r.analysis }));
     },
     async listRecentEvidence(limit = 20) {
       return [...evidence.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, limit);

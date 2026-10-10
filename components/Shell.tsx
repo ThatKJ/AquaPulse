@@ -10,6 +10,7 @@ import { Header } from "./Header";
 import { IncidentDrawer } from "./IncidentDrawer";
 import { FixFirstPanel, ScarcityPanel } from "./ModePanels";
 import { currentScenario, initialState, reducer, safe } from "./state";
+import { LiveReports } from "./LiveReports";
 
 // MapLibre and deck.gl need WebGL and window: client only. The dark surface shows until they load.
 const MapView = dynamic(() => import("./map/MapView"), { ssr: false });
@@ -133,6 +134,7 @@ export function Shell() {
         onSelectIncident={selectIncident}
         onSelectAsset={(id) => dispatch({ type: "SELECT_ASSET", id })}
       />
+      <LiveReports world={world} dispatch={dispatch} />
       <Header getContext={getContext} hasIncident={incident != null} demoOpen={demoOpen} onToggleDemo={() => dispatch({ type: "DEMO_OPEN", open: !demoOpen })} />
       <CityPulse
         world={world}

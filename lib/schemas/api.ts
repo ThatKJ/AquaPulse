@@ -16,7 +16,9 @@ export const HealthResponseSchema = z.object({
     modelId: z.string().optional(),
   }),
   db: CheckSchema.extend({ adapter: z.enum(["supabase", "memory"]), postgis: z.boolean() }),
-  twilio: CheckSchema,
+  twilio: CheckSchema.extend({ mode: z.enum(["demo", "live"]).optional() }),
+  /** Orchestration. The app cannot call n8n, so the best it can report is "configured". */
+  n8n: CheckSchema.optional(),
   checkedAt: z.string(),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;

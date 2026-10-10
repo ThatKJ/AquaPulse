@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Brain, ChevronRight, CircleCheck, CircleDashed, CircleX, CloudOff, CornerDownLeft, Database, Droplets, FlaskConical, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Brain, ChevronRight, CircleCheck, CircleDashed, CircleX, CloudOff, CornerDownLeft, Database, Droplets, FlaskConical, TriangleAlert, type LucideIcon, MessageSquare, Workflow } from "lucide-react";
 import { AskRequestSchema, AskResponseSchema, HealthResponseSchema, type AskResponse, type HealthResponse } from "@/lib/schemas/api";
 import { Skeleton, Tag } from "./ui";
 
@@ -72,6 +72,11 @@ function StatusChips({ health }: { health: Health }) {
       <Chip icon={awsChip[0]} label="AWS" value={awsChip[1]} tone={awsChip[2]} title={[aws.region, aws.state === "FAIL" ? "deterministic demo engine active" : null].filter(Boolean).join(" · ") || aws.state} />
       <Chip icon={Brain} label="AI" value={ai.observer} tone={ai.observer === "none" ? "text-muted" : "text-ink"} title={ai.modelId ?? `Evidence observer: ${ai.observer} (${ai.state})`} />
       <Chip icon={Database} label="DB" value={db.adapter} title={db.adapter === "memory" ? "Running in memory mode" : `Supabase (${db.state})`} />
+{/* Orchestration and comms only fit beside the command line on wide screens. */}
+      <span className="hidden items-center gap-1.5 min-[1600px]:flex">
+        <Chip icon={Workflow} label="Flow" value={health.data.n8n?.state === "UNVERIFIED" ? "n8n set" : "none"} tone={health.data.n8n?.state === "UNVERIFIED" ? "text-ink" : "text-muted"} title={health.data.n8n?.detail ?? "No n8n instance configured."} />
+      <Chip icon={MessageSquare} label="Comm" value={health.data.twilio.state === "NOT_CONFIGURED" ? "demo" : `Twilio ${health.data.twilio.mode ?? "demo"}`} tone={health.data.twilio.state === "NOT_CONFIGURED" ? "text-muted" : "text-ink"} title={health.data.twilio.detail} />
+      </span>
     </>
   );
 }
@@ -175,7 +180,7 @@ function AskAquaPulse({ getContext, hasIncident }: { getContext: () => Record<st
                   ))}
                 </div>
                 <p className="mt-1.5 text-[11px] text-faint" title={ask.data.modelId}>
-                  {ask.data.source === "bedrock" ? "Bedrock explains engine output; every number comes from the engine." : "Template answer from simulation data. Not AI-generated."}
+                  {ask.data.source === "bedrock" ? "Bedrock explains engine output; every number comes from the engine." : "Grounded system response: assembled from engine output by template. Not an LLM."}
                 </p>
               </div>
             )}

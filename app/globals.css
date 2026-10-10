@@ -32,6 +32,13 @@ body {
   overflow: hidden;
 }
 
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 .tabular {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;

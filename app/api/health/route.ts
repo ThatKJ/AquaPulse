@@ -17,8 +17,11 @@ const run = handle("health", async (_req, requestId) => {
     ai,
     db,
     twilio: twilioReady
-      ? { state: "UNVERIFIED", detail: "Credentials are set; no message has been sent to verify them." }
-      : { state: "NOT_CONFIGURED", detail: "Twilio env vars not set; alerts use the demo transport." },
+      ? { state: "UNVERIFIED", mode: env.TWILIO_MODE, detail: `Credentials are set (${env.TWILIO_MODE} mode); this endpoint does not send a message to verify them.` }
+      : { state: "NOT_CONFIGURED", mode: "demo", detail: "Twilio env vars not set; alerts use the demo transport." },
+    n8n: env.N8N_BASE_URL
+      ? { state: "UNVERIFIED", detail: "An n8n instance is configured; this endpoint cannot verify it." }
+      : { state: "NOT_CONFIGURED", detail: "No n8n instance configured." },
     checkedAt: new Date().toISOString(),
   };
   cached = { at: Date.now(), body };
