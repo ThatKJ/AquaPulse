@@ -45,13 +45,17 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: Converse
-                Effect: Allow
-                Action: bedrock:InvokeModel
-                Resource:
-                  # Cross-region inference profiles route to foundation models in other regions.
-                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
-                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*"
+              # Granted only when a Bedrock model is configured; a Rekognition-only deploy has no Bedrock permission.
+              - !If
+                - HasModel
+                - Sid: Converse
+                  Effect: Allow
+                  Action: bedrock:InvokeModel
+                  Resource:
+                    # Cross-region inference profiles route to foundation models in other regions.
+                    - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                    - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*"
+                - !Ref "AWS::NoValue"
               - Sid: Labels
                 Effect: Allow
                 Action: rekognition:DetectLabels

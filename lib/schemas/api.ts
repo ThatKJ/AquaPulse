@@ -93,6 +93,31 @@ export const ActionCompleteWebhookSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
+/**
+ * POST /api/state — the operator console mirrors engine state so incidents, their evidence membership,
+ * interventions and results are durable. The engine stays the source of truth; this is a write-through copy.
+ */
+const pt = z.object({ lng: z.number().min(-180).max(180), lat: z.number().min(-90).max(90) });
+const prov = z.enum(["LIVE", "STATIC_REAL", "SIMULATED", "DERIVED"]);
+const id = z.string().min(1).max(40);
+export const StateSyncSchema = z.object({
+  incidents: z.array(z.object({
+    id, kind: z.enum(["flood", "scarcity"]), type: z.string().max(40),
+    status: z.enum(["unverified", "verifying", "verified", "dismissed", "resolved"]),
+    cellId: id, location: pt, severity: z.number().int().min(1).max(10),
+    evidenceIds: z.array(id).max(40), evidenceScore: z.unknown().optional(), suspectedAssetId: id.optional(), provenance: prov,
+  })).max(20),
+  evidence: z.array(z.object({
+    id, channel: z.enum(["whatsapp", "sms", "web", "demo"]), text: z.string().max(1000), location: pt,
+    analysis: EvidenceAnalysisSchema.optional(), provenance: prov,
+  })).max(60),
+  interventions: z.array(z.object({
+    id, incidentId: id, bundle: z.unknown(), before: z.unknown(), expected: z.unknown(), observed: z.unknown(),
+    effectiveness: z.number().min(0).max(1), confidence: z.number().min(0).max(1), provenance: prov,
+  })).max(20),
+});
+export type StateSync = z.infer<typeof StateSyncSchema>;
+
 export const ErrorResponseSchema = z.object({
   requestId: z.string(),
   error: z.object({ code: z.string(), message: z.string() }),

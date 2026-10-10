@@ -3,7 +3,7 @@
 // All writes go through supabase-js (parameterised PostgREST); no SQL is ever built from input.
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { HealthResponse } from "../schemas/api";
+import type { StateSync, HealthResponse } from "../schemas/api";
 import { serverEnv } from "../schemas/env";
 import type { EvidenceAnalysis } from "../schemas/evidence";
 
@@ -41,6 +41,8 @@ export type Repo = {
   recordVerification(v: { incidentId: string; lat: number; lng: number; radiusM: number; question: string }): Promise<{ id: string }>;
   /** Marks the intervention completed, creating its row if the engine-side intervention was never persisted. */
   recordActionCompletion(c: { incidentId: string; bundleId: string; completedAt: string; note?: string }): Promise<void>;
+  /** Mirror engine state. Idempotent: rows are upserted by their engine ids. Returns row counts written. */
+  syncState(s: StateSync): Promise<{ incidents: number; evidence: number; interventions: number }>;
   listRecentEvidence(limit?: number): Promise<EvidenceRow[]>;
   health(): Promise<HealthResponse["db"]>;
 };
@@ -141,6 +143,37 @@ function supabaseRepo(db: SupabaseClient): Repo {
         .upsert({ id: c.bundleId, incident_id: c.incidentId, status: "completed", completed_at: c.completedAt, note: c.note ?? null }, { onConflict: "id" });
       if (error) throw new DbError("complete intervention", error);
     },
+    async syncState(s) {
+      const must = (what: string, r: { error: unknown }) => {
+        if (r.error) throw new DbError(what, r.error as { code?: string; message: string });
+      };
+      if (s.incidents.length)
+        must("upsert incidents", await db.from("incidents").upsert(s.incidents.map((i) => ({
+          id: i.id, kind: i.kind, type: i.type, status: i.status, cell_id: i.cellId, location: ewkt(i.location.lng, i.location.lat),
+          severity: i.severity, evidence_score: i.evidenceScore ?? null, suspected_asset_id: i.suspectedAssetId ?? null,
+          provenance: i.provenance, updated_at: new Date().toISOString(),
+        })), { onConflict: "id" }));
+      // Engine evidence ids become message ids, so a re-sync updates the same row.
+      const idOf = new Map<string, string>();
+      if (s.evidence.length) {
+        const r = await db.from("evidence_events").upsert(s.evidence.map((e) => ({
+          message_id: `engine:${e.id}`, channel: e.channel, body: e.text, location: ewkt(e.location.lng, e.location.lat),
+          analysis: e.analysis ?? null, analysis_source: e.analysis?.source ?? null, provenance: e.provenance,
+        })), { onConflict: "message_id" }).select("id, message_id");
+        must("upsert evidence", r);
+        for (const row of (r.data ?? []) as { id: string; message_id: string }[]) idOf.set(row.message_id.slice(7), row.id);
+      }
+      const links = s.incidents.flatMap((i) => i.evidenceIds.flatMap((e) => (idOf.has(e) ? [{ incident_id: i.id, evidence_id: idOf.get(e)! }] : [])));
+      if (links.length) must("link evidence", await db.from("incident_evidence").upsert(links, { onConflict: "incident_id,evidence_id" }));
+      if (s.interventions.length) {
+        must("upsert interventions", await db.from("interventions").upsert(s.interventions.map((r) => ({ id: r.id, incident_id: r.incidentId, bundle: r.bundle ?? {}, status: "applied" })), { onConflict: "id", ignoreDuplicates: true }));
+        must("upsert results", await db.from("intervention_results").upsert(s.interventions.map((r) => ({
+          intervention_id: r.id, before_state: r.before ?? {}, expected_state: r.expected ?? {}, observed_state: r.observed ?? {},
+          effectiveness: r.effectiveness, confidence: r.confidence, provenance: r.provenance,
+        })), { onConflict: "intervention_id" }));
+      }
+      return { incidents: s.incidents.length, evidence: s.evidence.length, interventions: s.interventions.length };
+    },
     async listRecentEvidence(limit = 20) {
       const { data, error } = await db.from("evidence_events").select(EVIDENCE_COLS).order("received_at", { ascending: false }).limit(limit);
       if (error) throw new DbError("list evidence", error);
@@ -162,6 +195,7 @@ function memoryRepo(): Repo {
   const evidence = new Map<string, EvidenceRow>();
   const log: { kind: "alert" | "verification" | "action"; id: string; data: unknown }[] = [];
   const alerts = new Map<string, AlertClaim>();
+  const mirror = new Map<string, unknown>();
   const record = (kind: (typeof log)[number]["kind"], data: unknown) => {
     const id = randomUUID();
     log.push({ kind, id, data });
@@ -194,6 +228,12 @@ function memoryRepo(): Repo {
     },
     recordVerification: async (v) => record("verification", v),
     recordActionCompletion: async (c) => void record("action", c),
+    async syncState(s) {
+      for (const i of s.incidents) mirror.set(`incident:${i.id}`, i);
+      for (const e of s.evidence) mirror.set(`evidence:${e.id}`, e);
+      for (const r of s.interventions) mirror.set(`intervention:${r.id}`, r);
+      return { incidents: s.incidents.length, evidence: s.evidence.length, interventions: s.interventions.length };
+    },
     async listRecentEvidence(limit = 20) {
       return [...evidence.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, limit);
     },

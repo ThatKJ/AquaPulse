@@ -31,6 +31,38 @@ export function Shell() {
   const { world, horizon } = s;
   const hi = HORIZONS.indexOf(horizon);
 
+  // Write-through mirror of engine state to the server (Supabase when configured, memory otherwise).
+  // Debounced and best-effort: the console never depends on it, so offline and demo runs are unaffected.
+  useEffect(() => {
+    if (world.incidents.length === 0) return;
+    const t = setTimeout(() => {
+      const body = {
+        incidents: world.incidents, // the server schema strips fields it does not store
+        evidence: world.evidence.map(({ id, channel, text, location, analysis, provenance }) => ({ id, channel, text, location, analysis, provenance })),
+        interventions: world.interventionRecords.map(({ id, incidentId, bundle, before, expected, observed, effectiveness, confidence, provenance }) => ({ id, incidentId, bundle, before, expected, observed, effectiveness, confidence, provenance })),
+      };
+      fetch("/api/state", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [world]);
+
+  // Demo shortcuts: Space = play/pause, ArrowRight = next event, R = reset. Ignored while a control has focus.
+  const playing = s.demo.playing;
+  useEffect(() => {
+    if (!demoOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || (el && el !== document.body && el.closest("input, textarea, select, button, [role=radio], [contenteditable]"))) return;
+      if (e.code === "Space") dispatch({ type: "DEMO_PLAY", playing: !playing });
+      else if (e.key === "ArrowRight") dispatch({ type: "DEMO_NEXT" });
+      else if (e.key === "r" || e.key === "R") dispatch({ type: "RESET" });
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [demoOpen, playing]);
+
   // WITHOUT side: the world before the previewed or applied bundle. WITH side: the world with it.
   const comparable = s.previewBundle != null || s.committedBefore != null;
   const baseWorld = s.previewBundle ? world : (s.committedBefore ?? world);

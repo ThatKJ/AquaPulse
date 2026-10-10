@@ -17,6 +17,10 @@ const ServerEnvSchema = z.object({
   TWILIO_ACCOUNT_SID: opt,
   TWILIO_AUTH_TOKEN: opt,
   TWILIO_PHONE_NUMBER: opt,
+  /** "live" sends real messages, and only to TWILIO_ALLOWED_TO. Anything else (default) records alerts without sending. */
+  TWILIO_MODE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["demo", "live"]).default("demo")),
+  /** Comma-separated E.164 numbers that live mode may message. Empty = nobody. */
+  TWILIO_ALLOWED_TO: opt,
   /** Shared secret n8n sends as `x-aquapulse-secret` on webhook calls. */
   WEBHOOK_SECRET: opt,
 });

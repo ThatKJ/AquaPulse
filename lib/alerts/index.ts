@@ -32,14 +32,16 @@ export async function sendAlert(input: { incidentId: string; audience: string; b
     alertId: c.id, transport: c.transport, status: c.status, sent: 0, failed: 0, detail: "Duplicate request: this alert was already handled; nothing was sent again.",
   });
   const env = serverEnv();
-  const to = (a.to ?? []).filter((n) => E164.test(n));
+  // Live mode can only reach numbers on the allowlist: a workflow bug cannot message the public.
+  const allowed = new Set((env.TWILIO_ALLOWED_TO ?? "").split(",").map((n) => n.trim()).filter(Boolean));
+  const to = (a.to ?? []).filter((n) => E164.test(n) && allowed.has(n.replace(/^whatsapp:/, "")));
   const skipped = (a.to?.length ?? 0) - to.length;
-  const twilioReady = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER;
+  const twilioReady = env.TWILIO_MODE === "live" && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER;
 
   if (!twilioReady || to.length === 0) {
     const detail = !twilioReady
-      ? "Twilio is not configured: the alert was recorded only, nothing was sent."
-      : "No valid E.164 recipients in `to`: the alert was recorded only, nothing was sent.";
+      ? "Demo transport (TWILIO_MODE is not live or Twilio is not configured): the alert was recorded only, nothing was sent."
+      : "No recipient in `to` is a valid E.164 number on TWILIO_ALLOWED_TO: the alert was recorded only, nothing was sent.";
     const claim = await repo().recordAlert({ ...a, transport: "demo", status: "queued", idempotencyKey: key });
     if (claim.duplicate) return dup(claim);
     return { alertId: claim.id, transport: "demo", status: "queued", sent: 0, failed: 0, detail };
@@ -82,6 +84,6 @@ export async function sendAlert(input: { incidentId: string; audience: string; b
   await repo().updateAlert(id, { status, providerId: firstSid });
   return {
     alertId: id, transport: "twilio", status, sent, failed,
-    detail: `Twilio accepted ${sent} of ${to.length} messages${skipped ? `; ${skipped} recipients skipped (not E.164)` : ""}.`,
+    detail: `Twilio accepted ${sent} of ${to.length} messages${skipped ? `; ${skipped} recipients skipped (not E.164 or not on the allowlist)` : ""}.`,
   };
 }
