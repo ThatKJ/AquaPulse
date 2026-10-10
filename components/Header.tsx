@@ -171,7 +171,7 @@ export function Header({
         <Droplets size={16} aria-hidden className="text-flood-low" />
         <h1 className="text-[15px] font-semibold tracking-tight text-ink">AquaPulse</h1>
       </div>
-      <p className="hidden truncate text-[13px] text-muted min-[1500px]:block">AI Decision Engine for a Safer, Water-Resilient Bengaluru</p>
+      <p className="hidden truncate text-[13px] text-muted xl:block">AI Decision Engine for a Safer, Water-Resilient Bengaluru</p>
       <div className="flex items-center gap-1.5">
         <Tag>Bengaluru</Tag>
         {/* The city feed is a seeded simulation, so it is not labelled LIVE. */}
