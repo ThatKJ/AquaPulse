@@ -4,6 +4,15 @@
 
 Division of labour: **n8n orchestrates, AquaPulse computes.** No scoring, fusion or thresholds live in n8n beyond the alert gate, which mirrors the engine's own bands.
 
+**Update, night of 2026-10-10:** a local n8n through `npx` did not finish installing in 20 minutes and was abandoned; the Docker daemon is not running. The fastest path is n8n Cloud (setup below). To show a live inbound report without n8n or Twilio:
+
+```bash
+curl -X POST https://aquapulse-liard.vercel.app/api/webhooks/report \\
+  -H "x-aquapulse-secret: $WEBHOOK_SECRET" -H "content-type: application/json" \\
+  -d '{"messageId":"SM-demo-'$(date +%s)'","from":"whatsapp:+910000000000","text":"TEST REPORT: drain overflowing onto the road","lat":12.92672,"lng":77.63805}'
+```
+With the dashboard open on the flood scenario (step 5 or later) it appears within about five seconds and fuses into F-01.
+
 ## Endpoints the workflows call
 
 All require the header `x-aquapulse-secret: <WEBHOOK_SECRET>`. A missing or wrong secret returns 401; an unset secret on the server returns 503.

@@ -2,7 +2,7 @@
 
 Updated 2026-10-10 (evening). A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment.
 
-Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel). Note: this was meant to be a preview deploy; Vercel assigned the project's first deployment to its production alias. App code deployed = commit `44ea345`.
+Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias). The project is connected to GitHub, so every push to `main` deploys; env vars are stored in the Vercel project (they were first passed per deploy, which let a Git-triggered deploy go out without them and briefly broke AWS and the database on the public site).
 
 ## Live (verified on the public path)
 
@@ -31,25 +31,32 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel). Note: this was
 - Ask AquaPulse answers are templates built from simulation data, labelled "Template answer", not an LLM.
 - Alerts use the demo transport (recorded, not sent).
 
+| State API security (public) | PASS | `/api/state` 401 without or with a wrong secret, 200 with it. The console mirrors through `/api/demo/sync`, which accepts only a scenario id and step count and replays the scenario server-side |
+| Inbound report → dashboard (public) | PASS | A report posted to `/api/webhooks/report` at 17:39:04Z was accepted in 1.4 s and appeared on the open dashboard at 17:39:10Z, fused into F-01 (3 → 4 reports, score 76 → 77), tagged WHATSAPP · LIVE REPORT. Sent by curl with explicit coordinates, not from WhatsApp; no image |
+| Public security checks | PASS | Unsigned Twilio webhook 403; wrong webhook secret 401; 4.6 MB image 413; GIF and HTML-as-PNG 415; oversized JSON 413; duplicate `messageId` returns the first row |
+| Reduced motion (public) | PASS | With `prefers-reduced-motion`, step 9 still shows 3,822 → 190, WINNER and PROTECTED |
+| Offline basemap (public) | PASS | Tiles blocked: tag shown, cells, AT RISK marker and figures present |
+| Ask AquaPulse (public, both sizes) | PASS | Answers labelled "Grounded system response … Not an LLM", source tags shown, no overflow |
+
 ## Blocked
 
 | Area | Reason |
 | --- | --- |
 | Bedrock | Account-level restriction: `ValidationException: Operation not allowed` on 2026-10-10 07:36Z; Claude and Nova both NOT_AUTHORIZED; Anthropic use-case form unfilled. Only AWS Support can lift it. One check per session; no further calls made. The Lambda role has no Bedrock permission until a model is configured |
-| Citizen report end to end (Twilio → n8n → AquaPulse → AWS → Supabase → dashboard) | No Twilio account and no n8n instance |
+| Citizen report from WhatsApp (Twilio → n8n → AquaPulse) | No Twilio account and no n8n instance. A local n8n via `npx` was attempted and abandoned after 20 minutes without finishing its install; the Docker daemon is not running. The AquaPulse half (webhook → Supabase → dashboard) is verified above |
+| Live alert | No Twilio account. Alerts are recorded on the demo transport |
+| Image in an inbound report | The report webhook only fetches media from Twilio hosts, so an image cannot arrive without Twilio. Photo analysis is verified through the upload path |
 
 ## Unverified
 
 - n8n workflows (`n8n/*.json`): generated to the export format, never imported into an instance.
 - Twilio: signature validation, media fetch (including the storage-bucket redirect rule) and live sending are unit-checked only.
-- Reports arriving by webhook are stored but do not appear on the dashboard: the console's world is the in-browser engine, and nothing reads stored reports back into it.
-- Reduced motion; the 1024-wide layout; Ask AquaPulse at 1920 on the public site (answered at 1440; the 1920 check read the page too early).
-- Offline basemap tag after the last polish round (verified before it).
+- The 1024-wide layout. Motion was measured (119 fps average at real speed) but not watched by a person.
 
 ## Known limits
 
 - Engine ids repeat across scenarios (F-01 exists in both flood and false-report), so the database mirror keeps the latest incident per id, not a history.
-- `/api/state` has no operator auth: anyone who finds it can write bounded incident rows. Rate-limited and schema-capped; needs auth before real use.
+- The database mirror only records scripted scenario states; an operator who applies a different bundle or adds a photo as a report is not mirrored. `/api/demo/sync` is public but can only write those fixed states. `/api/reports` is a public read of inbound report text and location (no reporter identity).
 - Deploys run as the account root user (the only identity available). The public runtime path does not.
 - Contract-test rows from 2026-10-10 remain in `evidence_events`, `alerts` and `verification_requests`.
 
@@ -84,3 +91,7 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel). Note: this was
 - Open · priority tiers and the predicted outline are not pattern-filled on the map (needs an extra deck.gl package); tiers differ by outline, height and label
 - Open · fused report markers sit under the incident label because demo reports are within metres of it; the "3 reports fused" badge carries it
 - Open · reduced motion and the 1024-wide layout were only spot-checked
+- Final phase (2026-10-10 night) · `/api/state` publicly writable · High · act · secret required; browser uses a state-free replay route
+- Final phase · one rate-limit bucket per IP shared by all routes, so dashboard polling exhausted Ask and photo upload on the public site · High · act · buckets are per route (verified: Ask and upload work after 12 s of polling)
+- Final phase · Git-triggered Vercel deploys had no env vars · High · act · env stored in the Vercel project; health sampled 6/6 PASS afterwards
+- Final phase · formal `/security-review` command · not run: it reviews unpushed diffs and this work was pushed incrementally. The same scope was reviewed by reading and by the public tests above

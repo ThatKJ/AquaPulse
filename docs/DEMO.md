@@ -1,36 +1,36 @@
 # Demo
 
-## Start
-```bash
-npm run build && npm run start     # http://localhost:3100/?demo=1
-# Direct links: /?demo=1&scenario=flood | scarcity | false-report
-```
-The scenarios need no network, AWS or database. Use a 1440x900 or 1920x1080 window. `Reset` in the demo strip (or reloading the page) restores the seeded state; `npm run demo:reset` clears demo rows from Supabase when it is configured.
+**Public:** https://aquapulse-liard.vercel.app/?demo=1 · direct links `&scenario=flood`, `scarcity`, `false-report`
+**Local fallback:** `npm run build && npm run start` → http://localhost:3100/?demo=1 (needs no network, AWS or database)
 
-Controls: scenario picker, Play, Next event, Reset, 1x / 4x. Arrow keys move the timeline.
+Controls: Space play/pause · → next event · R reset (click the map first so no control has focus). Use a 1440x900 or 1920x1080 window.
 
-## The 60-second flood sequence (scenario "Flood cascade")
+## What is real and what is staged
+- **Deterministic by design:** the city state and the three scenarios, so the disaster is reproducible on stage. Header: MODE SIMULATION.
+- **Live:** photo analysis (browser → Vercel → AWS Lambda → Amazon Rekognition), the Supabase/PostGIS database, and inbound reports: a report posted to the public report webhook appears on the open dashboard within about five seconds and is fused by the normal rules.
+- **Not connected:** Twilio and n8n (no accounts). The inbound report in the demo is posted to the webhook directly, not sent from WhatsApp. Bedrock is blocked on this AWS account, so Ask AquaPulse gives grounded template answers, labelled as such.
+
+## Three-minute script
+
 | Time | Do | Say |
 | --- | --- | --- |
-| 0–10 s | Show the calm twin | "This is not another flood map. AquaPulse is a decision engine for both too much water and too little water." |
-| 10–20 s | Next ×2 (rain + first report, AI analysis) | A citizen report arrives; the photo analysis is one input, not a decision. |
-| 20–30 s | Next ×3 (two more reports, fusion, score escalates) | Three reports become one incident; the Evidence Score rises to 76 and shows why. |
-| 30–40 s | Next ×2 (cells turn red, +30 reaches hospital) | In 30 minutes the water reaches the hospital: est. 3,822 people exposed. |
-| 40–50 s | Next (action auction) | 20 feasible bundles simulated; top three ranked with cost, response time and equity. |
-| 50–60 s | Hover the options, then Apply | Est. exposure 3,822 → 190 with Clear Drain D104 + Pump P02. The hospital tag flips from AT RISK to PROTECTED and "Why this won" lists the scoring terms. |
+| 0:00–0:15 | Open `/?demo=1&scenario=flood`. Calm twin on screen. | "Cities don't need another flood map. They need to know what happens next and what to do about it. This is AquaPulse, for both too much water and too little." |
+| 0:15–0:35 | Next ×2 (rain + first report, analysis). Open View evidence → Analyze a photo with a real flood photo. | "This city state is deterministic demo data so the disaster is reproducible. This part is live: the photo goes through our AWS Lambda to Amazon Rekognition, and the result lands in PostGIS." Point at REKOGNITION · LIVE. |
+| 0:35–0:55 | Summary, then Next ×4 (two more reports, fusion, escalation). | "AquaPulse doesn't plot reports blindly. Three reports fuse into one incident; the Evidence Score climbs 52, 64, 68, 76, and every component is shown." |
+| 0:55–1:20 | Next ×2 (cells turn red, +30 reaches hospital). | "Thirty minutes ahead the water reaches the hospital: an estimated 3,822 people exposed." |
+| 1:20–1:50 | Next (auction). Hover the three options, then Apply. | "Twenty feasible action bundles simulated, ranked on people protected, facilities, equity, cost and response time. Clear the drain and deploy the pump: 3,822 down to 190. The hospital goes from AT RISK to PROTECTED. Here is why it won." |
+| 1:50–2:10 | Next ×3 (alert, effectiveness). | "The alert is recorded on a labelled demo transport. Then the system checks itself: before, expected, observed, 95% effective." |
+| 2:10–2:30 | Open `&scenario=scarcity`, play at 4x. | "Same engine, opposite crisis. A trunk main fails in a heat spell: 3.7 megalitres a day short. Tankers are allocated by equity-weighted need, hospital first." |
+| 2:30–2:45 | Back to flood end state → Fix This First. | "Emergency response fixes today. AquaPulse learns what Bengaluru should fix permanently: drain D104, repeat failure, priority one." |
+| 2:45–3:00 | Header trust strip. | "Vercel, AWS Lambda, Rekognition, CloudWatch, Supabase PostGIS. Every number on screen comes from a deterministic engine, and everything simulated is labelled." |
 
-Clicking Apply yourself counts as the scenario's apply step, so keep pressing Next afterwards. Then: Next ×4 for the alert (demo transport, labelled), the effectiveness record, and D104 rising in Fix This First.
+Optional live moment (needs a second device or terminal): post a report to the webhook while the dashboard is open and let the judges watch "NEW CITIZEN EVIDENCE · LIVE REPORT" appear and fuse. Command in `docs/N8N.md`; the secret is `WEBHOOK_SECRET`.
 
-Expected figures at +30 before the action: baseline 3,822 · Pump P02 2,568 · Clear Drain D104 1,067 · both 190. These come from the engine and are asserted as ranges in `tests/scenarios.test.ts`.
+## Expected figures
++30 before the action: baseline 3,822 · Pump P02 2,568 · Clear Drain D104 1,067 · both 190. Evidence score 52 → 64 → 68 → 76. False report: 14, UNVERIFIED. Scarcity: 3.7 ML/day, 23,345 short at +60.
 
-## Scarcity (scenario "Scarcity: trunk main P031 fault")
-Play at 4x. Pipe fault plus heat opens S-01; the deficit grows from about 2.5 to 3.7 ML/day by +60; Optimize Response sends T01 to the hospital first, then the most vulnerable short cells.
-
-## False report (scenario "False report")
-One low-trust report on dry high ground: score 14, HOLD, the twin does not move.
-
-## Live AWS moment (optional, needs `aws login` or the deployed Lambda)
-Open an incident → View evidence → Analyze a photo. A real photo goes to Amazon Rekognition and comes back badged `rekognition`. Use a real flood photograph you have the right to show; a drawing is correctly rejected as "no hazard".
-
-## What to say about data
-Roads and buildings are real map data. Drains, pipes, facilities, populations and history are simulated and labelled SIM. Numbers are estimates from an explainable cell model, not a hydrodynamic simulation. Bedrock is blocked on this AWS account, so Ask AquaPulse answers are templates built from the simulation and labelled as such.
+## If something fails
+- Map tiles down: cells and markers still render; the tag reads "Basemap unavailable · showing risk layers only".
+- AWS or the public site down: run the local build; the header shows AWS UNAVAILABLE and the scenarios still play.
+- A drawing or screenshot as the test photo is correctly reported as "no hazard found". Use a real photograph you have the right to show.
+- Clicking Apply yourself counts as the scenario's apply step; keep pressing → afterwards.

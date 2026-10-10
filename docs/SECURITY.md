@@ -17,6 +17,8 @@ Hackathon-level controls that are implemented:
 Not done: authentication for operators (the demo UI is open), distributed rate limiting, malware scanning of uploads.
 
 ## Added 2026-10-10
-- `/api/state` (engine-state mirror) is unauthenticated: bounded by schema caps, a 256 KB body limit and a rate limit, and it only upserts rows keyed by engine ids. It needs operator auth before real use.
+- `/api/state` requires the server secret. The browser mirrors demo progress through `/api/demo/sync`, which takes only a scenario id and step count; the server replays the scenario and writes the rows, so no caller-supplied state is stored.
+- Rate limits are counted per route and per client address.
+- `/api/reports` is a public, rate-limited read of inbound report text and location for the console; it carries no reporter identity.
 - Twilio live mode sends only to numbers in `TWILIO_ALLOWED_TO`; alerts are claimed by idempotency key before sending.
 - The Lambda's role has no Bedrock permission unless a model is configured. The client bundle was scanned for the service-role key, webhook secret and Lambda secret: none present.

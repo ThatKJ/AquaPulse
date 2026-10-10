@@ -47,3 +47,20 @@ Same `lib/aws` code behind a Function URL with a least-privilege role, so the pu
 Browser → Vercel (Next.js, `aquapulse-liard.vercel.app`) → AWS Lambda Function URL (`aquapulse-ai-fn`) → Amazon Rekognition, logs to CloudWatch. Vercel → Supabase (Postgres + PostGIS) with the service-role key, server side only.
 
 `POST /api/state` mirrors the console's incidents, evidence membership, interventions and results into the database (upsert by engine id, debounced, best effort). The engine in the browser stays the source of truth; nothing reads the mirror back yet.
+
+## End-to-end flow (what exists, 2026-10-10)
+```
+Citizen ──(Twilio WhatsApp: not connected)──► n8n (workflows written, not run)
+                                                 │
+        any caller with the secret ─────────────►│
+                                                 ▼
+                              Vercel /api/webhooks/report ──► Supabase/PostGIS (evidence_events)
+Operator photo upload ──► Vercel /api/evidence ──► AWS Lambda ──► Amazon Rekognition ──► CloudWatch
+                                                 │
+                 Console polls /api/reports (5 s)│
+                                                 ▼
+        HydroTwin (engine in the browser) ──► fusion + Evidence Score ──► prediction ──► intervention auction ──► command center
+                                                 │
+                          /api/demo/sync (server replays scenario) ──► Supabase mirror
+```
+Solid arrows are verified on the public deployment. The two links marked "not connected / not run" are the Twilio and n8n hops.
