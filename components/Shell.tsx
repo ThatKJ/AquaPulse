@@ -1,10 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useReducer, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
 import { engine } from "@/lib/engine";
 import { HORIZONS } from "@/lib/schemas/simulation";
-import { BottomStrip, DEMO_H, STRIP_H, type Domain } from "./BottomStrip";
+import { BottomStrip, DEMO_H, STRIP_COLLAPSED_H, STRIP_H, type Domain } from "./BottomStrip";
 import { CityPulse } from "./CityPulse";
 import { Header } from "./Header";
 import { IncidentDrawer } from "./IncidentDrawer";
@@ -114,7 +114,10 @@ export function Shell() {
 
   const drawer = s.panel === "tankers" || s.panel === "priorities" ? s.panel : s.panel && incident ? "incident" : null;
   const right = drawer ? 380 : 0;
-  const bottom = STRIP_H + (demoOpen ? DEMO_H : 0);
+  // Outside a demo, with no incident to scrub or read about, the strip is one line so the map keeps the space.
+  const [stripOpen, setStripOpen] = useState<boolean | null>(null);
+  const stripCollapsed = !(stripOpen ?? (demoOpen || world.incidents.length > 0));
+  const bottom = (stripCollapsed ? STRIP_COLLAPSED_H : STRIP_H) + (demoOpen ? DEMO_H : 0);
   const padding = useMemo(() => ({ top: 48, left: 248, right, bottom }), [right, bottom]);
   const selectIncident = (id: string | null) => dispatch({ type: "SELECT_INCIDENT", id });
 
@@ -151,6 +154,8 @@ export function Shell() {
         onSelectIncident={selectIncident}
       />
       <BottomStrip
+        collapsed={stripCollapsed}
+        onToggle={() => setStripOpen(stripCollapsed)}
         world={world}
         horizon={horizon}
         preds={shownPreds}

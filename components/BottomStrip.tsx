@@ -10,6 +10,8 @@ import { PREDICTED, bandCss, riskBand, type RiskDomain } from "./risk";
 import { Empty, Label, ProvTag, Segmented, Tag, clock, fmt, horizonLabel, iconBtn } from "./ui";
 
 export const STRIP_H = 156;
+/** Height when collapsed to a single status line. */
+export const STRIP_COLLAPSED_H = 40;
 export const DEMO_H = 37;
 
 /** Which people-figure the app is talking about: follows the mode, or the selected incident's kind. */
@@ -218,6 +220,8 @@ export function BottomStrip({
   onCompare,
   onSelectIncident,
   demoActions,
+  collapsed,
+  onToggle,
 }: {
   world: WorldState;
   horizon: Horizon;
@@ -242,13 +246,30 @@ export function BottomStrip({
   onCompare: (c: "with" | "without") => void;
   onSelectIncident: (id: string) => void;
   demoActions: Omit<Parameters<typeof DemoControls>[0], "demo" | "scenario">;
+  /** One status line instead of the timeline and activity list. */
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   // Newest first; entries with the same minute keep their insertion order reversed.
   const stream = world.stream.map((e, i) => ({ e, i })).sort((a, b) => b.e.tMin - a.e.tMin || b.i - a.i);
   return (
     <div className="absolute bottom-0 z-10 border-t border-hairline bg-panel" style={{ left, right }}>
       {demoOpen && <DemoControls demo={demo} scenario={scenario} {...demoActions} />}
-      <div className="flex" style={{ height: STRIP_H }}>
+      {collapsed ? (
+        <div className="flex items-center gap-4 px-4 text-[11px] text-muted" style={{ height: STRIP_COLLAPSED_H }}>
+          <span className="mono text-faint">{clock(world.tMin)}</span>
+          <span className="min-w-0 flex-1 truncate">{stream[0] ? stream[0].e.title : "No activity yet."}</span>
+          <button type="button" onClick={onToggle} className="uppercase tracking-[0.08em] text-muted hover:text-ink" aria-expanded={false}>
+            Timeline and activity · {world.stream.length}
+          </button>
+        </div>
+      ) : (
+      <div className="relative flex" style={{ height: STRIP_H }}>
+        {!demoOpen && (
+          <button type="button" onClick={onToggle} className="absolute right-4 top-2.5 z-10 text-[11px] uppercase tracking-[0.08em] text-muted hover:text-ink" aria-expanded>
+            Collapse
+          </button>
+        )}
         <section aria-label="Timeline" className="flex w-[336px] shrink-0 flex-col gap-1.5 border-r border-hairline px-4 py-3">
           <div className="flex items-center justify-between">
             <Label>{fixFirst ? "Prevention" : "Timeline"}</Label>
@@ -304,6 +325,7 @@ export function BottomStrip({
           </ul>
         </section>
       </div>
+      )}
     </div>
   );
 }

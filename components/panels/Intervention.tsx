@@ -184,7 +184,7 @@ export function Simulator({
       </section>
 
       <Section
-        title={chosen === winner ? "Winning option" : "Selected option"}
+        title={chosen === winner ? "Best response" : "Selected response"}
         aside={
           <span className="tabular text-[11px] text-muted">
             rank {chosen.rank} · score {chosen.score.toFixed(1)}
@@ -213,7 +213,7 @@ export function Simulator({
         </dl>
       </Section>
 
-      <Section title="Why this won" aside={<span className="tabular text-[11px] text-muted">score {winner.score.toFixed(1)} · points per term</span>}>
+      <Section title="Why this response" aside={<span className="tabular text-[11px] text-muted">score {winner.score.toFixed(1)} · points per term</span>}>
         {chosen !== winner && <p className="mb-2 text-[13px] text-muted">{winner.bundle.label}</p>}
         <WhyBars o={winner} />
         <p className="mt-2 text-[11px] text-faint">Solid bars add to the score. Outlined bars are penalties.</p>

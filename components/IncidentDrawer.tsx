@@ -158,7 +158,7 @@ export function IncidentDrawer({
         )}
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[15px] font-medium text-ink">
-            <span className="tabular">{incident.id}</span> · {panel === "simulate" ? "Intervention simulator" : panel === "evidence" ? "Evidence" : human(incident.type)}
+            <span className="tabular">{incident.id}</span> · {panel === "simulate" ? "Best response" : panel === "evidence" ? "Evidence" : human(incident.type)}
           </h2>
           <p className="text-[11px] uppercase tracking-[0.06em] text-muted">
             {incident.kind} · {incident.status} · severity <span className="tabular">{incident.severity}/10</span>
@@ -246,7 +246,7 @@ export function IncidentDrawer({
                 <Empty>No prediction for this cell yet.</Empty>
               )}
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-hairline pt-2 text-[13px]">
-                <span className="text-muted">Evidence Score</span>
+                <span className="text-muted">Confidence</span>
                 {score ? (
                   <span className="flex items-center gap-2">
                     <span className="tabular text-ink">
@@ -399,7 +399,7 @@ export function IncidentDrawer({
         ) : (
           <>
             <button type="button" className={`${btnPrimary} col-span-2`} onClick={() => onPanel("simulate")}>
-              Simulate intervention
+              Compare responses
             </button>
             <button type="button" className={btnSecondary} onClick={() => onPanel(panel === "evidence" ? "incident" : "evidence")}>
               {panel === "evidence" ? "Summary" : `View evidence · ${evidence.length}`}

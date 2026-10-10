@@ -89,6 +89,10 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
           { id: "bg", type: "background", paint: { "background-color": SURFACE } },
           { id: "country-fill", type: "fill", source: "outline", paint: { "fill-color": "#121920" } },
           { id: "district-fill", type: "fill", source: "districts", paint: { "fill-color": "#121920", "fill-opacity": 1 } },
+          // Districts that need attention rise slightly once the camera tilts (state and district level). Seen from
+          // directly above, at India level, they read as a flat fill.
+          { id: "district-lift", type: "fill-extrusion", source: "districts", filter: ["in", ["get", "id"], ["literal", []]], paint: { "fill-extrusion-color": "#121920", "fill-extrusion-height": 0, "fill-extrusion-opacity": 0.9 } },
+          { id: "state-dim", type: "fill", source: "districts", filter: ["==", ["get", "state"], "__none__"], paint: { "fill-color": SURFACE, "fill-opacity": 0.55 } },
           { id: "district-line", type: "line", source: "districts", paint: { "line-color": "#1d262e", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.3, 7, 0.8] } },
           { id: "state-line", type: "line", source: "states", paint: { "line-color": "#3b4853", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.7, 7, 1.4] } },
           { id: "country-line", type: "line", source: "outline", paint: { "line-color": "#4a5863", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 7, 1.6] } },
@@ -116,6 +120,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
       attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false,
+      maxPitch: 45,
       maxBounds: [[55, -2], [110, 44]],
     });
     map.current = m;
@@ -166,9 +171,16 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     const colour: ExpressionSpecification | string = pairs.length ? (["match", ["get", "id"], ...pairs, "#121920"] as unknown as ExpressionSpecification) : "#121920";
     m.setPaintProperty("district-fill", "fill-color", colour);
     const ids = pairs.filter((_, i) => i % 2 === 0);
+    const heights = Object.entries(data?.districts ?? {}).filter(([, r]) => r.risk > 0).flatMap(([id, r]) => [id, 4000 + r.risk * 420]);
+    m.setFilter("district-lift", ["in", ["get", "id"], ["literal", ids]]);
+    if (ids.length) {
+      m.setPaintProperty("district-lift", "fill-extrusion-color", ["match", ["get", "id"], ...pairs, "#121920"] as unknown as ExpressionSpecification);
+      m.setPaintProperty("district-lift", "fill-extrusion-height", ["match", ["get", "id"], ...heights, 0] as unknown as ExpressionSpecification);
+    }
     m.setPaintProperty("district-fill", "fill-opacity", ids.length ? (["match", ["get", "id"], ids, 0.78, 1] as unknown as ExpressionSpecification) : 1);
   }, [data, ready]);
 
+  const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const prev = useRef<string | null>(null);
   useEffect(() => {
     const m = map.current;
@@ -181,14 +193,16 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         // Frame the state from its districts' positions, with a margin since these are centre points.
         const b = members.reduce((acc, d) => acc.extend([d.lng, d.lat]), new LngLatBounds([members[0].lng, members[0].lat], [members[0].lng, members[0].lat]));
         const pad = 0.7;
-        m.fitBounds([[b.getWest() - pad, b.getSouth() - pad], [b.getEast() + pad, b.getNorth() + pad]], { padding: { ...FIT, right: 384 }, duration: 1000, maxZoom: 7.5 });
-      } else m.fitBounds(INDIA, { padding: FIT, duration: 900 });
+        m.fitBounds([[b.getWest() - pad, b.getSouth() - pad], [b.getEast() + pad, b.getNorth() + pad]], { padding: { ...FIT, right: 384 }, duration: reduced ? 0 : 900, maxZoom: 7.5, pitch: 24, bearing: 0 });
+      } else m.fitBounds(INDIA, { padding: FIT, duration: reduced ? 0 : 800, pitch: 0, bearing: 0 });
+      m.setFilter("state-dim", stateSel ? ["!=", ["get", "state"], stateSel] : ["==", ["get", "state"], "__none__"]);
       return;
     }
     m.setFeatureState({ source: "districts", id: selected }, { selected: true });
     const d = BY_ID.get(selected);
-    if (d) m.flyTo({ center: [d.lng, d.lat], zoom: Math.max(m.getZoom(), 6.8), duration: 1100, padding: { top: 60, bottom: 50, left: 260, right: 380 }, essential: true });
-  }, [selected, stateSel, ready]);
+    m.setFilter("state-dim", d ? ["!=", ["get", "state"], d.state] : ["==", ["get", "state"], "__none__"]);
+    if (d) m.easeTo({ center: [d.lng, d.lat], zoom: Math.max(m.getZoom(), 7.4), pitch: 38, bearing: 0, duration: reduced ? 0 : 800, padding: { top: 60, bottom: 50, left: 260, right: 380 } });
+  }, [selected, stateSel, ready, reduced]);
 
   const sel = selected ? BY_ID.get(selected) : null;
   const selRisk = selected ? data?.districts[selected] : undefined;
@@ -329,7 +343,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
       </aside>
 
       {sel && (
-        <aside aria-label={`${sel.name} district`} className="absolute bottom-9 right-0 top-10 z-10 flex w-[360px] flex-col overflow-y-auto border-l border-hairline bg-panel">
+        <aside aria-label={`${sel.name} district`} className="panel-in absolute bottom-9 right-0 top-10 z-10 flex w-[360px] flex-col overflow-y-auto border-l border-hairline bg-panel">
           <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
             <div>
               <h2 className="text-[20px] font-medium leading-tight text-ink">{sel.name}</h2>
@@ -422,7 +436,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
       )}
 
       {stateSel && !sel && (
-        <aside aria-label={`${stateSel} state`} className="absolute bottom-9 right-0 top-10 z-10 flex w-[360px] flex-col overflow-y-auto border-l border-hairline bg-panel">
+        <aside aria-label={`${stateSel} state`} className="panel-in absolute bottom-9 right-0 top-10 z-10 flex w-[360px] flex-col overflow-y-auto border-l border-hairline bg-panel">
           <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
             <div>
               <h2 className="text-[20px] font-medium leading-tight text-ink">{stateSel}</h2>
@@ -465,15 +479,11 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
           <p className="text-faint">{hov.state}</p>
           {hovRisk && hovRisk.risk > 0 ? (
             <>
-              <p className="mt-1.5 flex justify-between text-muted">
-                AquaPulse water risk <span className="tabular text-ink">{hovRisk.risk}</span>
+              <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: bandCss(hovRisk.risk, "flood") }}>
+                {riskBand(hovRisk.risk).glyph} {riskBand(hovRisk.risk).label} water risk
               </p>
-              <p className="flex justify-between text-muted">
-                Official alert <span className="text-ink">{hovRisk.top?.severity} · {hovRisk.top?.event}</span>
-              </p>
-              <p className="flex justify-between text-muted">
-                Issued <span className="mono text-ink">{ist(hovRisk.top?.sentAt)}</span>
-              </p>
+              <p className="mt-1 leading-snug text-muted">{hovRisk.top && hovRisk.factors[0].contribution > 0 ? `Official ${hovRisk.top.event.toLowerCase()} alert, issued ${ist(hovRisk.top.sentAt)}` : "Rain in the current nowcast"}</p>
+              <p className="mt-1 text-faint">Click for details</p>
             </>
           ) : (
             <p className="mt-1.5 text-faint">No water-related alert or rain nowcast placed here.</p>

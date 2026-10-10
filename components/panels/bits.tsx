@@ -2,7 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import { bandCss, riskBand, type RiskDomain } from "../risk";
 import { fmt } from "../ui";
 
-export const DRAWER = "absolute bottom-0 right-0 top-12 z-10 flex w-[380px] flex-col border-l border-hairline bg-panel";
+export const DRAWER = "panel-in absolute bottom-0 right-0 top-12 z-10 flex w-[380px] flex-col border-l border-hairline bg-panel";
 
 /** "+1,200", "−95", "0": the sign is always written, so direction never depends on colour. */
 export const signed = (n: number, digits = 0) => {

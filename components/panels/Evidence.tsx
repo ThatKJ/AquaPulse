@@ -108,7 +108,7 @@ export function EvidenceScorePanel({ incident, world, history }: { incident: Inc
   const score = incident.evidenceScore;
   if (!score) {
     return (
-      <Section title="AquaPulse Evidence Score">
+      <Section title="Confidence · AquaPulse Evidence Score">
         <Empty>This incident has not been scored yet. A score appears once reports are fused.</Empty>
       </Section>
     );
@@ -118,7 +118,7 @@ export function EvidenceScorePanel({ incident, world, history }: { incident: Inc
   const components = [...score.components].sort((a, b) => b.weight - a.weight);
   const ContraIcon = contradictions ? TriangleAlert : CircleCheck;
   return (
-    <Section title="AquaPulse Evidence Score" aside={<Tag title="Computed by the AquaPulse engine">DERIVED</Tag>}>
+    <Section title="Confidence · AquaPulse Evidence Score" aside={<Tag title="Computed by the AquaPulse engine">DERIVED</Tag>}>
       <div className="flex items-end justify-between gap-3">
         <p className="tabular text-[36px] font-medium leading-none text-ink">
           {Math.round(score.total)}

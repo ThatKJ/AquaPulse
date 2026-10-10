@@ -43,6 +43,32 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Map labels read as cartography: text with a halo in the surface colour, never a boxed plate. */
+.map-label {
+  text-shadow:
+    0 0 2px #0a0d10,
+    0 0 4px #0a0d10,
+    0 1px 3px #0a0d10,
+    0 -1px 3px #0a0d10;
+}
+
+/* Motion tokens: micro 150ms, panel 220ms, map context 600-1000ms (set in the map code). */
+:root {
+  --t-micro: 150ms;
+  --t-panel: 220ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+.panel-in {
+  animation: panel-in var(--t-panel) var(--ease-out);
+}
+
 /* Reserved for incident ids, timestamps and system state. */
 .mono {
   font-family: var(--font-mono), ui-monospace, monospace;

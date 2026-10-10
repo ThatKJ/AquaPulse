@@ -13,7 +13,7 @@ const MODES: { value: Mode; label: string }[] = [
   { value: "combined", label: "Combined" },
   { value: "flood", label: "Flood" },
   { value: "scarcity", label: "Scarcity" },
-  { value: "fix-first", label: "Fix this first" },
+  { value: "fix-first", label: "Priority repairs" },
 ];
 
 function Row({ label, value, unit }: { label: string; value: React.ReactNode; unit?: string }) {
@@ -138,8 +138,24 @@ Priority score · tier {topPriority.tier} · {topAsset?.name ?? "asset"}
         )}
       </div>
 
+      {t && !fixFirst && (
+        <p className="border-t border-hairline px-4 py-2.5 text-[13px] leading-snug text-ink">
+          {(() => {
+            const when = horizon ? `within ${horizon} minutes` : "now";
+            const names = t.facilitiesAtRisk.map((id) => world.facilities.find((f) => f.id === id)?.name.replace(/ \(sim\)$/, "")).filter(Boolean);
+            if (names.length) return `Flooding ${horizon ? "may reach" : "has reached"} ${names[0]}${names.length > 1 ? ` and ${names.length - 1} more` : ""} ${when}.`;
+            if (t.facilitiesShort.length) return `${t.facilitiesShort.length} critical ${t.facilitiesShort.length === 1 ? "facility is" : "facilities are"} short of water ${when}.`;
+            if (t.exposedPopulation > 0) return `An estimated ${fmt(t.exposedPopulation)} people are exposed to flooding ${when}; no critical facility is at risk.`;
+            if (t.populationShort > 0) return `An estimated ${fmt(t.populationShort)} people are short of water ${when}.`;
+            return "No flooding or water shortage in the district right now.";
+          })()}
+        </p>
+      )}
+
       {t && (
-        <dl className="border-t border-hairline px-4 py-2">
+        <details className="border-t border-hairline px-4 py-2">
+          <summary className="cursor-pointer py-0.5 text-[11px] uppercase tracking-[0.08em] text-muted hover:text-ink">Figures</summary>
+        <dl>
           <Row label="Flood risk" value={<Band risk={t.maxFloodRisk} domain="flood" />} unit="peak" />
           <Row label="Water stress" value={<Band risk={t.maxScarcityRisk} domain="scarcity" />} unit="peak" />
           <Row label="Exposed to flooding" value={`est. ${fmt(t.exposedPopulation)}`} />
@@ -147,6 +163,7 @@ Priority score · tier {topPriority.tier} · {topAsset?.name ?? "asset"}
           <Row label="Active incidents" value={active.length} />
           <Row label="Facilities at risk / short" value={`${t.facilitiesAtRisk.length} / ${t.facilitiesShort.length}`} unit={`of ${world.facilities.length}`} />
         </dl>
+        </details>
       )}
 
       <div className="border-t border-hairline px-4 py-3">

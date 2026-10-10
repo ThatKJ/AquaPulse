@@ -105,7 +105,7 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
               {!placed
                 ? "No location shared, so it is not placed on the map. Ask the sender for a location pin."
                 : incident
-                  ? `Fused into ${incident.id} by the normal rules · Evidence Score ${Math.round(incident.evidenceScore?.total ?? 0)}/100.`
+                  ? `Fused into ${incident.id} by the normal rules · confidence ${Math.round(incident.evidenceScore?.total ?? 0)}/100.`
                   : "Outside the demo district or not fusable; stored only."}
             </p>
             {official && (

@@ -134,7 +134,7 @@ function useDrawIn(key: string): number {
 
 const lerp = (a: LngLat, b: LngLat, t: number): [number, number] => [a.lng + (b.lng - a.lng) * t, a.lat + (b.lat - a.lat) * t];
 const dist2 = (a: LngLat, b: LngLat) => (a.lng - b.lng) ** 2 + (a.lat - b.lat) ** 2;
-const LABEL = "tabular whitespace-nowrap border border-hairline bg-panel px-1.5 py-0.5 text-[11px] uppercase tracking-[0.06em] text-ink";
+const LABEL = "map-label tabular whitespace-nowrap text-[11.5px] font-medium leading-tight text-ink";
 
 export type MapViewProps = {
   world: WorldState;
@@ -519,12 +519,12 @@ export default function MapView(props: MapViewProps) {
                     <Icon size={hospital ? 15 : 13} aria-hidden />
                   </span>
                   {state ? (
-                    <span className={`${LABEL} flex items-center gap-1`} style={{ borderColor: tone }}>
+                    <span className={`${LABEL} flex items-center gap-1 text-[11px] uppercase tracking-[0.06em]`} style={{ color: tone }}>
                       <StateIcon size={11} aria-hidden style={{ color: tone }} />
                       {state}
                     </span>
                   ) : (
-                    hospital && near && <span className={`${LABEL} normal-case tracking-normal text-muted`}>{f.name}</span>
+                    hospital && near && <span className={`${LABEL} font-normal text-muted`}>{f.name}</span>
                   )}
                 </div>
               </Pin>
@@ -590,7 +590,7 @@ export default function MapView(props: MapViewProps) {
                   >
                     {dot}
                     {/* Sits below the dot so the incident's own label, usually a few metres away, does not cover it. */}
-                    {suspected && <span className={`${LABEL} absolute left-3 top-6 border-ink`}>{a.id} · Suspected cause</span>}
+                    {suspected && <span className={`${LABEL} absolute left-3 top-6`}><span className="mono">{a.id}</span> · suspected cause</span>}
                   </div>
                 )}
               </Pin>
@@ -658,10 +658,10 @@ export default function MapView(props: MapViewProps) {
                           <CircleCheck size={12} aria-hidden className="absolute -right-1.5 -top-1.5 rounded-full bg-surface text-verified" />
                         )}
                       </span>
-                      <span className={`${LABEL} text-left leading-[1.45] ${off ? "text-faint line-through" : ""}`}>
+                      <span className={`${LABEL} bg-surface/70 px-1.5 py-1 text-left leading-[1.45] ${off ? "text-faint line-through" : ""}`}>
                         {i.id}
                         {on && ` · ${human(i.type)}`}
-                        {on && risk != null && ` · ${Math.round(risk)}% risk`}
+                        {on && risk != null && ` · ${riskBand(risk).label} risk`}
                         <span className={`block ${verdict === "escalate" && !off ? "text-ink" : "text-muted"}`}>
                           {scoreText}
                           {(on || n > 1) && ` · ${n} ${n === 1 ? "report" : "reports fused"}`}
@@ -677,7 +677,7 @@ export default function MapView(props: MapViewProps) {
       <Legend mode={mode} style={{ left: padding.left + 12, bottom: padding.bottom + 12, maxWidth: `calc(100vw - ${padding.left + padding.right + 24}px)` }} />
 
       {basemap === "offline" && (
-        <div role="status" className={`${LABEL} absolute normal-case tracking-normal text-muted`} style={{ left: padding.left + 12, top: padding.top + 12 }}>
+        <div role="status" className={`${LABEL} absolute font-normal text-muted`} style={{ left: padding.left + 12, top: padding.top + 12 }}>
           Basemap unavailable · showing risk layers only
         </div>
       )}

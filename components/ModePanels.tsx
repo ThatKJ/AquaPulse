@@ -295,7 +295,7 @@ export function FixFirstPanel({
     <aside aria-label="Fix this first" className={DRAWER}>
       <header className="px-4 py-3">
         <div className="flex items-center justify-between">
-          <Label>Fix this first</Label>
+          <Label>Priority repairs</Label>
           <Tag title="Simulated for the demo, not municipal data">SIM</Tag>
         </div>
         <h2 className="mt-1 text-[15px] font-medium text-ink">Prevention</h2>
