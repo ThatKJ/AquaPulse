@@ -1,0 +1,27 @@
+# National data source audit (India)
+
+Research only: no application code was changed. Each row was tested with one or two real requests on 2026-10-10 (~23:35 IST) from a residential IP, identifying as `AquaPulse-research`. Nothing here is integrated yet.
+
+| Source | Official URL | Machine-readable | Format | Auth | Cadence | Real request | India coverage | Fields seen | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **NDMA SACHET CAP feed** (aggregates IMD offices, CWC, state SDMAs) | `sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml`; per-alert `…/FetchXMLFile?identifier=…` | Yes | RSS index + CAP 1.2 XML per alert | None | Continuous; newest item was ~30 min old; 99 items in the feed | **200**, 73 KB; one CAP alert fetched in full | National. Issuers in this sample: CWC 25, Andhra Pradesh SDMA 25, IMD Dehradun 13, IMD Patna 6, IMD Thiruvananthapuram 5, IMD Chennai 5 | `identifier`, `sender`, `sent`, `msgType`, `event` (e.g. Flood), `urgency`, `severity`, `certainty`, `effective`, `onset`, `expires`, `headline`, `description` (CWC alerts state river, station, level, warning level and trend in text), references | **IMPLEMENT FIRST** |
+| **IMD district nowcast RSS** | `mausam.imd.gov.in/imd_latest/contents/dist_nowcast_rss.php` | Yes | RSS (ISO-8859-1) | None | 3-hourly nowcasts; 100 items, stamped 19:00 the same evening | **200**, 63 KB | District level, national | `title` (district), `Onset`, `Expires`, `sent`, `SenderName`, `category`, `description` (e.g. "Moderate rain: 5-15 mm/hr, thunderstorms, 41–61 kmph gusts") | IMPLEMENT second |
+| IMD JSON APIs (district warnings, nowcast, district/state rainfall, current weather, AWS/ARG, basin QPF) | `mausam.imd.gov.in/api/*.php` | Yes | JSON | **IP whitelisting by IMD** | Per product | **401** "IP … needs to be whitelisted" on the first two; later calls timed out, so I stopped | National | Not obtained | **BLOCKED** until IMD whitelists a fixed server IP (request by email to IMD; a Lambda would need a static egress IP) |
+| IMD CAP on the WMO alert hub | `cap-sources.s3.amazonaws.com/in-imd-en/rss.xml` | Yes | RSS + CAP | None | Unknown | **200** but only 1.6 KB (near-empty index) | National in principle | — | DEFER (SACHET carries the same alerts with more volume) |
+| CWC Flood Forecast site API | `ffs.india-water.gov.in/ffm/api/…` | JSON, but **undocumented** (the website's internal API) | JSON | None observed | CWC forecasts update about 3-hourly | `station-water-level-above-warning/` → **200** `[]`; `layer-station/` timed out; a guessed path → 404 | National stations | Not obtained beyond an empty list | **DEFER**: no published API or terms; using it is scraping an internal interface. CWC flood alerts already arrive through SACHET |
+| MOSDAC (GSMaP-ISRO rainfall, INSAT products) | `mosdac.gov.in` catalog; download API | Files, not a query API | HDF5 / NetCDF | **MOSDAC account** (SSO); some NRT products need privileged access | GSMaP-ISRO hourly, with latency | Catalog page 200; the API path I tried → 404 | Indian landmass | Not obtained | **BLOCKED** on an account, then DEFER: needs a server-side HDF5 worker |
+| India-WRIS (reservoirs) | `indiawris.gov.in` | Not confirmed | Web app | Unknown | Daily bulletins | Site 200; no API tested | National | — | DEFER (research needed) |
+| data.gov.in (OGD) | `api.data.gov.in` | Yes for registered datasets | JSON/CSV | API key (free registration) | Mostly static/periodic | Connection failed from here | National | — | DEFER (key required) |
+| **District boundaries** | geoBoundaries `gbOpen/IND/ADM2` (source: Local Government Directory, Pathways Data) | Yes | GeoJSON (simplified version available) | None | Static (2021) | **200** metadata: 736 units, ODbL 1.0 | National | Name, shape | **IMPLEMENT** as the district layer, with attribution; check disputed-boundary depiction before publishing |
+
+## What this means
+
+- **Usable tonight without anyone's permission:** NDMA SACHET (official, CAP standard, includes both IMD weather alerts and CWC river alerts) and the IMD district nowcast RSS. Together they support: districts under official warning, flood alerts with river level against warning level (from CWC text), nowcast rain intensity bands, and freshness per source.
+- **Not usable yet:** IMD's JSON APIs (whitelisting), MOSDAC rasters (account plus HDF5 processing), a supported CWC station feed.
+- **Consequence for the risk score:** a first "AquaPulse Composite Water Risk" can honestly use official alert severity, urgency and certainty, alert type, nowcast intensity and CWC alert presence. Measured rainfall totals, river gauge series and heat data would be UNKNOWN (not zero) until those feeds are unblocked, and the score must report coverage accordingly.
+- **CAP alerts are multilingual** (Hindi, Telugu and others in this sample) and area targeting varies by issuer, so district matching needs care and tests against recorded real alerts.
+
+## Recommendation: first source
+**NDMA SACHET CAP feed.** One adapter gives official IMD and CWC alerts nationally, in a documented international standard, with explicit onset/expiry for freshness, and no credentials. Poll centrally every 10 minutes, store alerts with their identifiers (natural deduplication), never from the browser.
+
+Not started. Building the national layer is a major change to a frozen, judge-ready product and waits for approval.
