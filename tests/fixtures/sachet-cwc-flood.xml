@@ -1,0 +1,65 @@
+<cap:alert xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+<cap:identifier>IN-1791646094823013_13</cap:identifier>
+<cap:sender>Uttar-Pradesh-SDMA</cap:sender>
+<cap:sent>2026-10-10T21:00:15+05:30</cap:sent>
+<cap:status>Actual</cap:status>
+<cap:msgType>Update</cap:msgType>
+<cap:scope>Public</cap:scope>
+<cap:restriction/>
+<cap:addresses/>
+<cap:note/>
+<cap:references>CWC,IN-1791646094823013_5,2026-10-10T20:57:04+05:30</cap:references>
+<cap:incidents/>
+<cap:info>
+<cap:language>en-IN</cap:language>
+<cap:category>Met</cap:category>
+<cap:event>Flood</cap:event>
+<cap:urgency>Future</cap:urgency>
+<cap:severity>Moderate</cap:severity>
+<cap:certainty>Likely</cap:certainty>
+<cap:audience>1</cap:audience>
+<cap:effective>2026-10-10T20:00:00+05:30</cap:effective>
+<cap:onset>2026-10-10T21:00:15+05:30</cap:onset>
+<cap:expires>2026-10-11T09:00:00+05:30</cap:expires>
+<cap:headline>River SAI at Rae-Bareli in Rae-Bareli district of Uttar Pradesh continues to flow in above normal flood situation at 8:00 pm today.</cap:headline>
+<cap:description>River SAI at Rae-Bareli in Rae-Bareli district of Uttar Pradesh continues to flow in above normal flood situation at 8:00 pm today. At 8:00 pm, it was flowing at a level of 100.34 m with steady trend which is 0.34 m above its Warning Level of 100 m and 0.66 m below its Danger Level of 101 m.</cap:description>
+<cap:instruction/>
+<cap:web>https://ffs.india-water.gov.in/#/main/hydrograph</cap:web>
+<cap:contact/>
+<cap:parameter>
+<cap:valueName>Polygon URL</cap:valueName>
+<cap:value>https://sachet.ndma.gov.in/cap_public_website/FetchPolygonXMLFile?identifier=1791646094823013</cap:value>
+</cap:parameter>
+<cap:area>
+<cap:areaDesc>SAI, Rae-Bareli, Rae-Bareli, Uttar Pradesh</cap:areaDesc>
+<cap:altitude>26.2</cap:altitude>
+<cap:ceiling>81.25</cap:ceiling>
+</cap:area>
+</cap:info>
+<cap:info>
+<cap:language>HI</cap:language>
+<cap:category>Met</cap:category>
+<cap:event>Flood</cap:event>
+<cap:urgency>Future</cap:urgency>
+<cap:severity>Moderate</cap:severity>
+<cap:certainty>Likely</cap:certainty>
+<cap:audience>1</cap:audience>
+<cap:effective>2026-10-10T20:00:00+05:30</cap:effective>
+<cap:onset>2026-10-10T21:00:15+05:30</cap:onset>
+<cap:expires>2026-10-11T09:00:00+05:30</cap:expires>
+<cap:headline>उत्तर प्रदेश के रायबरेली ज़िले में रायबरेली के पास साई नदी आज रात 8:00 बजे भी सामान्य से ऊपर बाढ़ की स्थिति में बह रही है।</cap:headline>
+<cap:description>River SAI at Rae-Bareli in Rae-Bareli district of Uttar Pradesh continues to flow in above normal flood situation at 8:00 pm today. At 8:00 pm, it was flowing at a level of 100.34 m with steady trend which is 0.34 m above its Warning Level of 100 m and 0.66 m below its Danger Level of 101 m.</cap:description>
+<cap:instruction/>
+<cap:web>https://ffs.india-water.gov.in/#/main/hydrograph</cap:web>
+<cap:contact/>
+<cap:parameter>
+<cap:valueName>Polygon URL</cap:valueName>
+<cap:value>https://sachet.ndma.gov.in/cap_public_website/FetchPolygonXMLFile?identifier=1791646094823013</cap:value>
+</cap:parameter>
+<cap:area>
+<cap:areaDesc>SAI, Rae-Bareli, Rae-Bareli, Uttar Pradesh</cap:areaDesc>
+<cap:altitude>26.2</cap:altitude>
+<cap:ceiling>81.25</cap:ceiling>
+</cap:area>
+</cap:info>
+</cap:alert>
