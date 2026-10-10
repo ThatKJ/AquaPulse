@@ -19,6 +19,8 @@ export type State = {
   compare: "with" | "without";
   panel: Panel;
   tankerPlan: TankerAssignment[] | null;
+  /** Evidence Score over time per incident, recorded whenever the engine's score changes. UI memory only. */
+  scoreHistory: Record<string, ScorePoint[]>;
   /** Inline error from an engine action. */
   notice: string | null;
   demo: {
@@ -30,6 +32,16 @@ export type State = {
     playing: boolean;
     speed: 1 | 4;
   };
+};
+
+export type ScorePoint = {
+  tMin: number;
+  /** Engine score, 0..100. */
+  total: number;
+  verdict: "hold" | "verify" | "escalate";
+  reports: number;
+  /** Why it moved, derived from what changed: never free text from a model. */
+  reason: string;
 };
 
 export type Action =
@@ -74,6 +86,7 @@ export function initialState(): State {
     compare: "with",
     panel: null,
     tankerPlan: null,
+    scoreHistory: {},
     notice: null,
     demo: { open: null, scenarioId: null, stepIndex: 0, playing: false, speed: 1 },
   };
@@ -84,7 +97,31 @@ const panelForMode = (mode: Mode, incidentId: string | null): Panel =>
 
 export const currentScenario = (s: State) => scenarios.find((x) => x.id === s.demo.scenarioId) ?? scenarios[0];
 
+/** The reducer the app uses: `step` plus the score history bookkeeping. */
 export function reducer(s: State, a: Action): State {
+  const next = step(s, a);
+  if (next.world === s.world) return next;
+  let history = next.scoreHistory;
+  for (const inc of next.world.incidents) {
+    const score = inc.evidenceScore;
+    if (!score) continue;
+    const points = history[inc.id] ?? [];
+    const last = points[points.length - 1];
+    if (last && Math.abs(last.total - score.total) < 0.05) continue;
+    const reports = inc.evidenceIds.length;
+    const reason = !last
+      ? "First report received"
+      : score.total < last.total
+        ? "Conflicting observation received"
+        : reports > last.reports
+          ? "Independent report corroborates"
+          : "Analysis and context updated";
+    history = { ...history, [inc.id]: [...points, { tMin: next.world.tMin, total: score.total, verdict: score.verdict, reports, reason }] };
+  }
+  return history === next.scoreHistory ? next : { ...next, scoreHistory: history };
+}
+
+function step(s: State, a: Action): State {
   switch (a.type) {
     case "SELECT_INCIDENT":
       return {
