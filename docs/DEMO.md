@@ -3,6 +3,7 @@
 ## Start
 ```bash
 npm run build && npm run start     # http://localhost:3100/?demo=1
+# Direct links: /?demo=1&scenario=flood | scarcity | false-report
 ```
 The scenarios need no network, AWS or database. Use a 1440x900 or 1920x1080 window. `Reset` in the demo strip (or reloading the page) restores the seeded state; `npm run demo:reset` clears demo rows from Supabase when it is configured.
 
@@ -16,9 +17,9 @@ Controls: scenario picker, Play, Next event, Reset, 1x / 4x. Arrow keys move the
 | 20–30 s | Next ×3 (two more reports, fusion, score escalates) | Three reports become one incident; the Evidence Score rises to 76 and shows why. |
 | 30–40 s | Next ×2 (cells turn red, +30 reaches hospital) | In 30 minutes the water reaches the hospital: est. 3,822 people exposed. |
 | 40–50 s | Next (action auction) | 20 feasible bundles simulated; top three ranked with cost, response time and equity. |
-| 50–60 s | Hover the options, then Apply | Est. exposure 3,822 → 190 with Clear Drain D104 + Pump P02. |
+| 50–60 s | Hover the options, then Apply | Est. exposure 3,822 → 190 with Clear Drain D104 + Pump P02. The hospital tag flips from AT RISK to PROTECTED and "Why this won" lists the scoring terms. |
 
-Then: Next ×4 for the alert (demo transport, labelled), the effectiveness record, and D104 rising in Fix This First.
+Clicking Apply yourself counts as the scenario's apply step, so keep pressing Next afterwards. Then: Next ×4 for the alert (demo transport, labelled), the effectiveness record, and D104 rising in Fix This First.
 
 Expected figures at +30 before the action: baseline 3,822 · Pump P02 2,568 · Clear Drain D104 1,067 · both 190. These come from the engine and are asserted as ranges in `tests/scenarios.test.ts`.
 

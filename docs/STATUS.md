@@ -43,3 +43,10 @@ States: WORKING (verified, evidence named) · PARTIAL · BLOCKED · NOT STARTED.
 - Security · webhooks 404 with Supabase because incidents are not persisted · Medium · act · migration `0002` drops those foreign keys; verification and action-complete now record (Supabase path not exercised: no service key in `.env.local`)
 - Security · reporter phone hash was unsalted SHA-256 · Medium · act · HMAC keyed with the server secret
 - Security · AI health state is per instance on serverless · Low · skip · can only under-report
+- Polish round (2026-10-10) · shared risk grammar (Safe/Watch/Elevated/High/Critical with glyphs), visible calm-state cells, map legend, AT RISK → PROTECTED facility state, timeline axis, trust strip (MODE SIMULATION · AWS · AI · DB), intervention ladder with "Why this won", proof loop, evidence score history, scarcity affected-zone panel, prevention view, `?scenario=` links
+- Polish round · bug · manual Apply during the demo let the scenario apply a second bundle · High · act · a manual Apply now counts as the scenario's apply step (verified: flood reaches 14/14 with one intervention)
+- Polish round · bug · scarcity mode showed flood figures in the hero and timeline · High · act · figures follow the active domain
+- Final rehearsal on the production build, 1440x900 and 1920x1080 · flood 14/14, scarcity 6/6, false report 3/3, Reset returns to 1 event and step 0 · zero console errors
+- Open · priority tiers and the predicted outline are not pattern-filled on the map (needs an extra deck.gl package); tiers differ by outline, height and label
+- Open · fused report markers sit under the incident label because demo reports are within metres of it; the "3 reports fused" badge carries it
+- Open · reduced motion and the 1024-wide layout were only spot-checked

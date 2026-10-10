@@ -1,242 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import { EvidenceResponseSchema, MAX_IMAGE_BYTES } from "@/lib/schemas/api";
-import { ArrowDown, ArrowLeft, ArrowUp, Award, CircleCheck, CircleX, Minus, TriangleAlert, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowUp, Minus, ShieldCheck, TriangleAlert, X } from "lucide-react";
+import { CONFIG, engine } from "@/lib/engine";
 import type { EvidenceEvent, Incident, WorldState } from "@/lib/schemas/domain";
-import type { EvidenceAnalysis, ScoreComponent } from "@/lib/schemas/evidence";
-import {
-  HORIZONS,
-  type ActionBundle,
-  type AuctionOption,
-  type AuctionResult,
-  type Counterfactual,
-  type Horizon,
-  type Prediction,
-} from "@/lib/schemas/simulation";
-import type { Panel } from "./state";
-import { AnimatedNumber, Empty, Label, ProvTag, Section, Sparkline, Tag, btnPrimary, btnSecondary, clock, fmt, horizonLabel, human, iconBtn, pct } from "./ui";
+import { HORIZONS, type ActionBundle, type AuctionResult, type Counterfactual, type Horizon, type Prediction } from "@/lib/schemas/simulation";
+import { AnalyzePhoto, EvidenceItem, EvidenceScorePanel, Verdict, heldReason } from "./panels/Evidence";
+import { ProofLoop, Simulator } from "./panels/Intervention";
+import { Band, DRAWER, State } from "./panels/bits";
+import { safe, type Panel, type ScorePoint } from "./state";
+import { AnimatedNumber, Empty, Label, ProvTag, Section, Tag, btnPrimary, btnSecondary, clock, fmt, horizonLabel, human, iconBtn, pct } from "./ui";
 
-const STATUS_ICON = { pass: CircleCheck, warn: TriangleAlert, fail: CircleX } as const;
-const STATUS_TONE = { pass: "text-verified", warn: "text-flood-mid", fail: "text-flood-high" } as const;
-const SOURCE_LABEL = { bedrock: "Bedrock", rekognition: "Rekognition", fixture: "Recorded analysis" } as const;
-const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmt(Math.abs(n))}`;
-
-function ScoreRow({ c }: { c: ScoreComponent }) {
-  const Icon = STATUS_ICON[c.status];
+/** Risk from NOW to +60 on a true time axis, y scaled to the data, with the engine's facility threshold drawn in. */
+function Trajectory({ shown, base, threshold, active, title }: { shown: number[]; base: number[] | null; threshold: number; active: number; title: string }) {
+  const W = 348;
+  const H = 108;
+  const pad = { l: 6, r: 6, t: 16, b: 18 };
+  const all = [...shown, ...(base ?? []), threshold];
+  const lo = Math.max(0, Math.floor(Math.min(...all) - 6));
+  const hi = Math.min(100, Math.ceil(Math.max(...all) + 6));
+  const x = (i: number) => pad.l + (HORIZONS[i] / HORIZONS[HORIZONS.length - 1]) * (W - pad.l - pad.r);
+  const y = (v: number) => pad.t + (1 - (v - lo) / (hi - lo || 1)) * (H - pad.t - pad.b);
+  const line = (values: number[]) => values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  const ty = y(threshold);
   return (
-    <li className="flex items-center gap-2 py-[3px] text-[13px]">
-      <Icon size={13} aria-label={c.status} className={`shrink-0 ${STATUS_TONE[c.status]}`} />
-      <span className="min-w-0 flex-1 truncate text-muted">{c.label}</span>
-      <span className="tabular text-ink">{c.display}</span>
-    </li>
-  );
-}
-
-function EvidenceItem({ e, full }: { e: EvidenceEvent; full: boolean }) {
-  const a = e.analysis;
-  return (
-    <li className="border-t border-hairline py-2.5 first:border-t-0 first:pt-0">
-      <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.06em] text-muted">
-        <span className="tabular">{e.id}</span>
-        <span>{e.channel}</span>
-        <span className="tabular">{clock(e.tMin)}</span>
-        <span className="flex-1" />
-        <ProvTag p={e.provenance} />
-      </div>
-      {e.text && <p className="text-[13px] leading-snug text-ink">“{e.text}”</p>}
-      <p className="tabular mt-1 text-[11px] text-faint">
-        Reporter trust {pct(e.reporterTrust)}
-        {e.locationAccuracyM != null && ` · GPS ±${fmt(e.locationAccuracyM)} m`}
-      </p>
-      {full && <p className="mt-0.5 text-[11px] text-faint">{e.mediaUrl ? "Photo attached" : "No photo attached"}</p>}
-      {a ? (
-        <div className="mt-2 border-l border-hairline pl-2.5">
-          <div className="mb-1 flex items-center gap-2">
-            <Tag title={a.modelId}>{SOURCE_LABEL[a.source]}</Tag>
-            <span className="tabular text-[11px] text-muted">
-              {human(a.incidentType)} · severity {a.severity}/10 · confidence {pct(a.confidence)}
-            </span>
-          </div>
-          <p className="text-[13px] leading-snug text-muted">{a.summary}</p>
-          {full && (
-            <>
-              {a.observations.length > 0 && (
-                <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[13px] leading-snug text-muted">
-                  {a.observations.map((o) => (
-                    <li key={o}>{o}</li>
-                  ))}
-                </ul>
-              )}
-              <p className="tabular mt-1.5 text-[11px] text-faint">
-                Blockage {pct(a.blockageProbability)} · structural damage {pct(a.structuralDamageProbability)} · spam {pct(a.spamProbability)}
-                {a.estimatedWaterDepthCm && ` · depth est. ${a.estimatedWaterDepthCm.min}–${a.estimatedWaterDepthCm.max} cm`}
-              </p>
-              {a.materialsObserved.length > 0 && <p className="mt-0.5 text-[11px] text-faint">Materials: {a.materialsObserved.join(", ")}</p>}
-            </>
-          )}
-        </div>
-      ) : (
-        <p className="mt-1 text-[11px] text-faint">No AI analysis attached to this report.</p>
-      )}
-    </li>
-  );
-}
-
-type Upload = { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "done"; analysis: EvidenceAnalysis };
-
-/** Sends one photo to /api/evidence and shows what came back. Nothing enters the world until the user adds it. */
-function AnalyzePhoto({ incident, onAdd }: { incident: Incident; onAdd: (a: EvidenceAnalysis, text: string) => void }) {
-  const [up, setUp] = useState<Upload>({ status: "idle" });
-  async function send(file: File | undefined) {
-    if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) return setUp({ status: "error", message: "only JPEG and PNG are accepted" });
-    if (file.size > MAX_IMAGE_BYTES) return setUp({ status: "error", message: "the photo is larger than 4 MB" });
-    setUp({ status: "loading" });
-    try {
-      const body = new FormData();
-      body.set("image", file);
-      body.set("lat", String(incident.location.lat));
-      body.set("lng", String(incident.location.lng));
-      const r = await fetch("/api/evidence", { method: "POST", body });
-      if (!r.ok) throw new Error(`/api/evidence returned ${r.status}`);
-      const parsed = EvidenceResponseSchema.safeParse(await r.json());
-      if (!parsed.success) throw new Error("/api/evidence returned an unexpected shape");
-      setUp({ status: "done", analysis: parsed.data.analysis });
-    } catch (e) {
-      setUp({ status: "error", message: e instanceof Error ? e.message : "upload failed" });
-    }
-  }
-  return (
-    <Section title="Analyze a photo">
-      <label className="block text-[11px] text-faint">
-        JPEG or PNG, up to 4 MB. WebP is not accepted.
-        <input
-          type="file"
-          accept="image/jpeg,image/png"
-          disabled={up.status === "loading"}
-          onChange={(e) => void send(e.target.files?.[0])}
-          className="mt-1.5 block w-full text-[13px] text-muted file:mr-3 file:h-8 file:border file:border-solid file:border-hairline file:bg-transparent file:px-3 file:text-[11px] file:uppercase file:tracking-[0.06em] file:text-ink"
-        />
-      </label>
-      <div aria-live="polite" className="mt-2">
-        {up.status === "loading" && <p className="text-[13px] text-muted">Analyzing photo…</p>}
-        {up.status === "error" && (
-          <p role="alert" className="flex items-start gap-1.5 text-[13px] text-ink">
-            <TriangleAlert size={13} aria-hidden className="mt-0.5 shrink-0 text-flood-mid" />
-            Evidence analysis: {up.message}. Nothing was added.
-          </p>
-        )}
-        {up.status === "done" && (
-          <div className="border-l border-hairline pl-2.5">
-            <div className="mb-1 flex items-center gap-2">
-              <Tag title={up.analysis.modelId}>{SOURCE_LABEL[up.analysis.source]}</Tag>
-              <span className="tabular text-[11px] text-muted">
-                {human(up.analysis.incidentType)} · severity {up.analysis.severity}/10 · confidence {pct(up.analysis.confidence)}
-              </span>
-            </div>
-            <p className="text-[13px] leading-snug text-muted">{up.analysis.summary}</p>
-            <p className="mt-1 text-[11px] text-faint">Not part of the incident yet.</p>
-            <button
-              type="button"
-              className={`${btnSecondary} mt-2`}
-              onClick={() => {
-                onAdd(up.analysis, "Photo uploaded by operator");
-                setUp({ status: "idle" });
-              }}
-            >
-              Add as report
-            </button>
-          </div>
-        )}
-      </div>
-    </Section>
-  );
-}
-
-function Option({
-  o,
-  winner,
-  selected,
-  horizon,
-  noun,
-  facilityName,
-  onPreview,
-  onSelect,
-}: {
-  noun: string;
-  o: AuctionOption;
-  winner: boolean;
-  selected: boolean;
-  horizon: Horizon;
-  facilityName: (id: string) => string;
-  onPreview: (b: ActionBundle | null) => void;
-  onSelect: () => void;
-}) {
-  const { outcome: out } = o;
-  const down = out.exposureChangePct <= 0;
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onSelect}
-      onMouseEnter={() => onPreview(o.bundle)}
-      onFocus={() => onPreview(o.bundle)}
-      className={`block w-full border-l-2 px-4 py-3 text-left transition-colors duration-150 hover:bg-panel-raised ${
-        selected ? "border-ink bg-panel-raised" : "border-transparent"
-      }`}
-    >
-      <div className="flex items-start gap-2">
-        <span className="tabular mt-px text-[13px] text-faint">{o.rank}</span>
-        <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-ink">{o.bundle.label}</span>
-        {winner && (
-          <Tag className="text-ink">
-            <Award size={11} aria-hidden />
-            Recommended
-          </Tag>
-        )}
-      </div>
-      <div className="mt-2 flex items-baseline justify-between gap-3 pl-4">
-        <span className="tabular text-[13px] text-muted">
-          est. {fmt(out.baselineExposure)} → <span className="text-[15px] text-ink">est. {fmt(out.exposure)}</span> {noun}
-        </span>
-        <span className="tabular flex items-center gap-0.5 text-[15px] text-ink">
-          {down ? <ArrowDown size={13} aria-label="down" /> : <ArrowUp size={13} aria-label="up" />}
-          {Math.abs(Math.round(out.exposureChangePct))}%
-        </span>
-      </div>
-      <dl className="tabular mt-2 grid grid-cols-3 gap-x-3 pl-4 text-[13px]">
-        <div>
-          <dt className="font-sans text-[11px] text-faint">Cost proxy</dt>
-          <dd className="text-ink">₹{out.costProxyLakh.toFixed(1)} L</dd>
-        </div>
-        <div>
-          <dt className="font-sans text-[11px] text-faint">Response</dt>
-          <dd className="text-ink">{Math.round(out.responseTimeMin)} min</dd>
-        </div>
-        <div>
-          <dt className="font-sans text-[11px] text-faint">Facilities protected</dt>
-          <dd className="truncate text-ink" title={out.facilitiesProtected.map(facilityName).join(", ")}>
-            {out.facilitiesProtected.length}
-          </dd>
-        </div>
-      </dl>
-      <dl className="tabular ml-4 mt-2 grid grid-cols-3 gap-x-3 border-t border-hairline pt-2 text-[13px]">
-        <div>
-          <dt className="font-sans text-[11px] text-faint">Equity score</dt>
-          <dd className="text-ink">{Math.round(out.equityScore)}/100</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="font-sans text-[11px] text-faint">Vulnerable-area exposure</dt>
-          <dd className="text-ink">{signed(out.vulnerableExposureChange)}</dd>
-        </div>
-      </dl>
-      {out.deficitReductionLiters > 0 && (
-        <p className="tabular mt-1 pl-4 text-[11px] text-muted">Deficit removed est. {fmt(out.deficitReductionLiters)} L</p>
-      )}
-      <span className="sr-only">Predicted at +{horizon} minutes</span>
-    </button>
+    <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label={title}>
+      <line x1={pad.l} x2={W - pad.r} y1={H - pad.b} y2={H - pad.b} className="stroke-hairline" />
+      <line x1={x(active)} x2={x(active)} y1={pad.t} y2={H - pad.b} className="stroke-hairline" />
+      <line x1={pad.l} x2={W - pad.r} y1={ty} y2={ty} className="stroke-faint" strokeDasharray="2 3" />
+      <text x={W - pad.r} y={ty < pad.t + 12 ? ty + 12 : ty - 4} textAnchor="end" className="fill-muted text-[11px]">
+        facility risk threshold <tspan className="tabular">{threshold}</tspan>
+      </text>
+      {base && <polyline fill="none" strokeWidth={1.5} strokeDasharray="4 3" points={line(base)} className="stroke-faint" />}
+      <polyline fill="none" strokeWidth={1.5} points={line(shown)} className="stroke-ink" />
+      {shown.map((v, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(v)} r={i === active ? 3.5 : 2} className="fill-ink" />
+          <text x={x(i)} y={H - 4} textAnchor={i === 0 ? "start" : i === shown.length - 1 ? "end" : "middle"} className={`tabular text-[11px] ${i === active ? "fill-ink" : "fill-faint"}`}>
+            {horizonLabel(HORIZONS[i])} · {Math.round(v)}
+          </text>
+        </g>
+      ))}
+    </svg>
   );
 }
 
@@ -250,6 +55,8 @@ export function IncidentDrawer({
   comparing,
   auction,
   counterfactual,
+  scoreHistory,
+  committedBefore,
   onPanel,
   onClose,
   onPreview,
@@ -268,16 +75,21 @@ export function IncidentDrawer({
   comparing: boolean;
   auction: AuctionResult | null;
   counterfactual: Counterfactual | null;
+  /** `state.scoreHistory[incident.id]`. Without it the score panel shows the current score only. */
+  scoreHistory?: ScorePoint[];
+  /** `state.committedBefore`. Without it the proof loop shows the asset's current priority only. */
+  committedBefore?: WorldState | null;
   onPanel: (p: Panel) => void;
   onClose: () => void;
   onPreview: (b: ActionBundle | null) => void;
   onCommit: (b: ActionBundle) => void;
 }) {
   const [picked, setPicked] = useState<string | null>(null);
+  const flood = incident.kind === "flood";
   const hi = HORIZONS.indexOf(horizon);
   const riskAt = (p: Prediction | null) => {
     const c = p?.cells[incident.cellId];
-    return c ? (incident.kind === "flood" ? c.floodRisk : c.scarcityRisk) : null;
+    return c ? (flood ? c.floodRisk : c.scarcityRisk) : null;
   };
   const cell = shownPreds[hi]?.cells[incident.cellId];
   const risk = riskAt(shownPreds[hi]);
@@ -285,13 +97,43 @@ export function IncidentDrawer({
   const evidence = world.evidence.filter((e) => incident.evidenceIds.includes(e.id));
   const asset = world.assets.find((a) => a.id === incident.suspectedAssetId);
   const facilityName = (id: string) => world.facilities.find((f) => f.id === id)?.name ?? id;
-  const flagged = shownPreds[hi]?.totals[incident.kind === "flood" ? "facilitiesAtRisk" : "facilitiesShort"] ?? [];
-  const records = world.interventionRecords.filter((r) => r.incidentId === incident.id);
   const winner = auction?.options[0];
-  // The engine counts flood-exposed plus water-short people in auction exposure.
-  const noun = incident.kind === "flood" ? "exposed" : "people affected";
-  const alerts = world.alerts.filter((a) => a.incidentId === incident.id);
   const chosen = auction?.options.find((o) => o.bundle.id === picked) ?? winner;
+  // The engine counts flood-exposed plus water-short people in auction exposure.
+  const noun = flood ? "exposed" : "people affected";
+  const alerts = world.alerts.filter((a) => a.incidentId === incident.id);
+
+  // Facilities over the engine threshold now, and those the intervention took back under it.
+  const flagKey = flood ? "facilitiesAtRisk" : "facilitiesShort";
+  const flagged = shownPreds[hi]?.totals[flagKey] ?? [];
+  const protectedIds = comparing ? (basePreds[hi]?.totals[flagKey] ?? []).filter((id) => !flagged.includes(id)) : [];
+
+  // Proof loop: the latest applied bundle, and what it did to the affected asset's fix-first standing.
+  const records = world.interventionRecords.filter((r) => r.incidentId === incident.id);
+  const record = records[records.length - 1];
+  const proofAssetId = record
+    ? (record.bundle.interventions.find((iv) => iv.kind === "CLEAR_DRAIN" || iv.kind === "REPAIR_PIPE")?.targetId ?? incident.suspectedAssetId)
+    : undefined;
+  const priority = useMemo(() => {
+    if (!proofAssetId) return null;
+    const find = (w: WorldState) => safe(() => engine.infraPriorities(w))?.find((p) => p.assetId === proofAssetId);
+    const now = find(world);
+    if (!now) return null;
+    // `committedBefore` is the world before the last commit of any incident: use it only when that commit is this record.
+    const mine = committedBefore && world.interventionRecords[world.interventionRecords.length - 1] === record && committedBefore.interventionRecords.length === world.interventionRecords.length - 1;
+    return { now, before: mine ? find(committedBefore) : undefined };
+  }, [world, committedBefore, record, proofAssetId]);
+  const proofAsset = world.assets.find((a) => a.id === proofAssetId);
+  const proof = record && (
+    <ProofLoop
+      record={record}
+      kind={incident.kind}
+      noun={noun}
+      earlier={records.length - 1}
+      priority={priority}
+      assetLabel={proofAsset ? `${human(proofAsset.kind)} ${proofAsset.id}` : null}
+    />
+  );
 
   // Strongest probability per cause across every analysed report.
   const causes = new Map<string, { probability: number; rationale: string }>();
@@ -302,11 +144,12 @@ export function IncidentDrawer({
 
   const baseSeries = basePreds.map(riskAt);
   const shownSeries = shownPreds.map(riskAt);
-  const hasSeries = baseSeries.every((v) => v != null);
+  const hasSeries = baseSeries.every((v) => v != null) && shownSeries.every((v) => v != null);
   const TrendIcon = cell?.trend === "rising" ? ArrowUp : cell?.trend === "falling" ? ArrowDown : Minus;
+  const threshold = flood ? CONFIG.flood.facilityRiskThreshold : CONFIG.scarcity.facilityShortThreshold;
 
   return (
-    <aside aria-label={`Incident ${incident.id}`} className="absolute bottom-0 right-0 top-12 z-10 flex w-[380px] flex-col border-l border-hairline bg-panel">
+    <aside aria-label={`Incident ${incident.id}`} className={DRAWER}>
       <header className="flex items-center gap-2 px-4 py-3">
         {panel !== "incident" && (
           <button type="button" className={iconBtn} onClick={() => onPanel("incident")} aria-label="Back to incident">
@@ -315,7 +158,7 @@ export function IncidentDrawer({
         )}
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[15px] font-medium text-ink">
-            <span className="tabular">{incident.id}</span> · {panel === "simulate" ? "Intervention simulation" : panel === "evidence" ? "Evidence" : human(incident.type)}
+            <span className="tabular">{incident.id}</span> · {panel === "simulate" ? "Intervention simulator" : panel === "evidence" ? "Evidence" : human(incident.type)}
           </h2>
           <p className="text-[11px] uppercase tracking-[0.06em] text-muted">
             {incident.kind} · {incident.status} · severity <span className="tabular">{incident.severity}/10</span>
@@ -330,74 +173,33 @@ export function IncidentDrawer({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {panel === "simulate" ? (
           <>
-            <section className="border-t border-hairline px-4 py-3">
-              <div className="flex items-center justify-between">
-                <Label>Baseline · no action · {horizonLabel(horizon)}m</Label>
-                <Tag title="Computed by the AquaPulse engine">DERIVED</Tag>
-              </div>
-              {auction?.options.length ? (
-                <>
-                  <p className="tabular mt-1 text-[32px] font-medium leading-none text-ink">
-                    <span className="text-[15px] text-muted">est. </span>
-                    <AnimatedNumber value={auction.baselineExposure} />
-                    <span className="font-sans text-[13px] font-normal text-muted"> {noun}</span>
-                  </p>
-                  <p className="tabular mt-1.5 text-[11px] text-faint">
-                    {auction.evaluated} feasible bundles simulated · top {auction.options.length} shown
-                  </p>
-                </>
-              ) : (
-                <Empty>The engine returned no intervention options for this incident yet.</Empty>
-              )}
-            </section>
-            {auction && auction.options.length > 0 && (
-              <div
-                role="radiogroup"
-                aria-label="Intervention options"
-                className="divide-y divide-hairline border-t border-hairline"
-                onMouseLeave={() => onPreview(auction.options.find((o) => o.bundle.id === picked)?.bundle ?? null)}
-              >
-                {auction.options.map((o) => (
-                  <Option
-                    key={o.bundle.id}
-                    o={o}
-                    winner={o === winner}
-                    selected={o.bundle.id === picked}
-                    horizon={horizon}
-                    noun={noun}
-                    facilityName={facilityName}
-                    onPreview={onPreview}
-                    onSelect={() => {
-                      setPicked(o.bundle.id);
-                      onPreview(o.bundle);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-            {auction && auction.winnerReasons.length > 0 && (
-              <Section title={`Why ${winner?.bundle.label ?? "option 1"} ranks first`}>
-                <ul className="list-disc space-y-1 pl-4 text-[13px] leading-snug text-muted">
-                  {auction.winnerReasons.map((r) => (
-                    <li key={r}>{r}</li>
-                  ))}
-                </ul>
-              </Section>
-            )}
+            {proof}
+            <Simulator
+              auction={auction}
+              chosen={chosen}
+              horizon={horizon}
+              noun={noun}
+              kind={incident.kind}
+              applied={!!record}
+              facilityName={facilityName}
+              onPick={setPicked}
+              onPreview={onPreview}
+            />
           </>
         ) : panel === "evidence" ? (
           <>
-            <section className="border-t border-hairline px-4 py-3">
+            <EvidenceScorePanel incident={incident} world={world} history={scoreHistory} />
+            <Section title="Reports" aside={<span className="tabular text-[11px] text-faint">{evidence.length}</span>}>
               {evidence.length ? (
                 <ul>
                   {evidence.map((e) => (
-                    <EvidenceItem key={e.id} e={e} full />
+                    <EvidenceItem key={e.id} e={e} />
                   ))}
                 </ul>
               ) : (
                 <Empty>No reports are attached to this incident yet.</Empty>
               )}
-            </section>
+            </Section>
             <AnalyzePhoto
               incident={incident}
               onAdd={(analysis, text) =>
@@ -417,53 +219,86 @@ export function IncidentDrawer({
           </>
         ) : (
           <>
-            <section className="flex items-end justify-between gap-4 border-t border-hairline px-4 py-3">
-              <div>
-                <Label>
-                  {incident.kind} risk · {horizonLabel(horizon)}
-                  {horizon ? "m predicted" : ""}
-                  {comparing ? " · with intervention" : ""}
-                </Label>
-                {risk != null ? (
-                  <p className="tabular mt-1 text-[40px] font-medium leading-none text-ink">
+            <section className="border-t border-hairline px-4 py-3">
+              <Label>
+                {incident.kind} risk · <span className="tabular">{horizonLabel(horizon)}</span>
+                {horizon ? "m predicted" : ""}
+                {comparing ? " · with intervention" : ""}
+              </Label>
+              {risk != null && cell ? (
+                <div className="mt-1 flex items-end justify-between gap-4">
+                  <p className="tabular text-[40px] font-medium leading-none text-ink">
                     <AnimatedNumber value={risk} />
-                    <span className="text-[15px] text-muted">%</span>
+                    <span className="text-[15px] font-normal text-muted">%</span>
                   </p>
+                  <div className="space-y-1 pb-0.5 text-right">
+                    <div>
+                      <Band risk={risk} domain={incident.kind} />
+                    </div>
+                    <p className="tabular flex items-center justify-end gap-1 text-[13px] text-muted">
+                      confidence <span className="text-ink">{pct(cell.confidence)}</span> ·
+                      <TrendIcon size={12} aria-hidden />
+                      <span className="font-sans">{cell.trend}</span>
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <Empty>No prediction for this cell yet.</Empty>
+              )}
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-hairline pt-2 text-[13px]">
+                <span className="text-muted">Evidence Score</span>
+                {score ? (
+                  <span className="flex items-center gap-2">
+                    <span className="tabular text-ink">
+                      {Math.round(score.total)}
+                      <span className="text-muted"> / 100</span>
+                    </span>
+                    <Verdict verdict={score.verdict} />
+                  </span>
                 ) : (
-                  <Empty>No prediction for this cell yet.</Empty>
+                  <span className="text-faint">not scored yet</span>
                 )}
               </div>
-              {cell && (
-                <dl className="tabular space-y-0.5 pb-0.5 text-right text-[13px]">
-                  <div className="flex items-center justify-end gap-1 text-muted">
-                    <TrendIcon size={12} aria-hidden />
-                    {cell.trend}
-                  </div>
-                  <div className="text-muted">
-                    confidence <span className="text-ink">{pct(cell.confidence)}</span>
-                  </div>
-                </dl>
+              {score?.verdict === "hold" && (
+                <p className="mt-1 text-[13px] leading-snug text-muted">
+                  <span className="text-ink">Held as low-confidence evidence. Not escalated.</span> {heldReason(score)}
+                </p>
               )}
             </section>
 
-            <Section
-              title="Evidence score"
-              aside={score && <Tag className={score.verdict === "escalate" ? "text-ink" : ""}>{score.verdict}</Tag>}
-            >
-              {score ? (
-                <>
-                  <p className="tabular mb-1.5 text-[15px] text-ink">
-                    {Math.round(score.total)}
-                    <span className="text-[11px] text-faint"> / 100</span>
-                  </p>
-                  <ul>
-                    {score.components.map((c) => (
-                      <ScoreRow key={c.key} c={c} />
-                    ))}
-                  </ul>
-                </>
+            {proof}
+
+            <Section title="Who is affected">
+              {cell ? (
+                <p className="tabular text-[13px] text-ink">
+                  est. {fmt(flood ? cell.exposedPopulation : cell.populationShort)}
+                  <span className="font-sans text-muted"> {flood ? "people exposed" : "people short of water"} in this cell</span>
+                </p>
               ) : (
-                <Empty>This incident has not been scored yet. A score appears once reports are fused.</Empty>
+                <Empty>No exposure estimate yet.</Empty>
+              )}
+              {flagged.length + protectedIds.length > 0 ? (
+                <ul className="mt-2 divide-y divide-hairline border-t border-hairline">
+                  {flagged.slice(0, 5).map((id) => (
+                    <li key={id} className="flex items-center justify-between gap-3 py-1.5 text-[13px]">
+                      <span className="min-w-0 truncate text-ink">{facilityName(id)}</span>
+                      <State icon={TriangleAlert} tone="text-flood-mid">
+                        {flood ? "At risk" : "Short"}
+                      </State>
+                    </li>
+                  ))}
+                  {protectedIds.map((id) => (
+                    <li key={id} className="flex items-center justify-between gap-3 py-1.5 text-[13px]">
+                      <span className="min-w-0 truncate text-ink">{facilityName(id)}</span>
+                      <State icon={ShieldCheck} tone="text-verified">
+                        Protected
+                      </State>
+                    </li>
+                  ))}
+                  {flagged.length > 5 && <li className="tabular py-1.5 text-[11px] text-faint">+{flagged.length - 5} more over the threshold</li>}
+                </ul>
+              ) : (
+                <p className="mt-1 text-[13px] text-faint">No critical facility {flood ? "at flood risk" : "short of water"} at this horizon.</p>
               )}
             </Section>
 
@@ -482,7 +317,7 @@ export function IncidentDrawer({
                 <Empty>No infrastructure asset is suspected yet.</Empty>
               )}
               {topCauses.length > 0 && (
-                <ul className="mt-2 space-y-1.5">
+                <ul className="mt-2 space-y-2">
                   {topCauses.map(([cause, c]) => (
                     <li key={cause} className="text-[13px] leading-snug">
                       <div className="flex justify-between gap-2">
@@ -496,111 +331,62 @@ export function IncidentDrawer({
               )}
             </Section>
 
-            <Section title="Who is affected">
-              {cell ? (
-                <p className="tabular text-[13px] text-ink">
-                  est. {fmt(incident.kind === "flood" ? cell.exposedPopulation : cell.populationShort)}
-                  <span className="font-sans text-muted"> {incident.kind === "flood" ? "people exposed" : "people short of water"} in this cell</span>
-                </p>
-              ) : (
-                <Empty>No exposure estimate yet.</Empty>
-              )}
-              {flagged.length > 0 ? (
-                <ul className="mt-1.5 space-y-0.5 text-[13px] text-muted">
-                  {flagged.slice(0, 5).map((id) => (
-                    <li key={id} className="flex items-center gap-1.5">
-                      <TriangleAlert size={12} aria-hidden className="shrink-0 text-flood-mid" />
-                      <span className="truncate">{facilityName(id)}</span>
-                    </li>
-                  ))}
-                  {flagged.length > 5 && <li className="tabular text-[11px] text-faint">+{flagged.length - 5} more</li>}
-                </ul>
-              ) : (
-                <p className="mt-1 text-[13px] text-faint">No critical facility {incident.kind === "flood" ? "at flood risk" : "short of water"} at this horizon.</p>
-              )}
-            </Section>
-
             <Section title="Risk trajectory" aside={comparing ? <span className="text-[11px] text-faint">dashed = without intervention</span> : undefined}>
               {hasSeries ? (
-                <>
-                  <Sparkline
-                    title={`${incident.kind} risk from now to +60 minutes`}
-                    labels={HORIZONS.map((h) => `${horizonLabel(h)} · ${Math.round(shownSeries[HORIZONS.indexOf(h)] ?? 0)}`)}
-                    activeIndex={hi}
-                    series={[
-                      ...(comparing ? [{ values: baseSeries as number[], className: "text-faint", dashed: true }] : []),
-                      { values: shownSeries as number[], className: "text-ink" },
-                    ]}
-                  />
-                </>
+                <Trajectory
+                  title={`${incident.kind} risk from now to +60 minutes, facility risk threshold ${threshold}`}
+                  shown={shownSeries as number[]}
+                  base={comparing ? (baseSeries as number[]) : null}
+                  threshold={threshold}
+                  active={hi}
+                />
               ) : (
                 <Empty>The trajectory appears once the engine predicts all four horizons.</Empty>
               )}
             </Section>
 
             {counterfactual && (
-              <Section title="If we had acted earlier" aside={<Tag title="Computed by the AquaPulse engine">DERIVED</Tag>}>
-                <p className="tabular text-[13px] leading-relaxed text-muted">
-                  est. <span className="text-ink">{fmt(counterfactual.currentExposure)}</span> exposed now · est.{" "}
-                  <span className="text-ink">{fmt(counterfactual.counterfactualExposure)}</span> if {counterfactual.bundleLabel} {counterfactual.minutesEarlier} min earlier ·
-                  est. <span className="text-ink">{fmt(counterfactual.avoidableExposure)}</span> avoidable
-                </p>
-              </Section>
-            )}
-
-            {records.length > 0 && (
-              <Section title="Did it work">
-                <ul className="space-y-2">
-                  {records.map((r) => (
-                    <li key={r.id} className="text-[13px]">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-ink">{r.bundle.label}</span>
-                        <ProvTag p={r.provenance} />
-                      </div>
-                      <p className="tabular mt-0.5 text-muted">
-                        est. {fmt(r.before.exposure)} before → expected {fmt(r.expected.exposure)} → observed{" "}
-                        <span className="text-ink">{fmt(r.observed.exposure)}</span>
-                      </p>
-                      <p className="tabular flex items-center gap-1 text-[11px] text-muted">
-                        <CircleCheck size={12} aria-hidden className="text-verified" />
-                        effectiveness {pct(r.effectiveness)} · confidence {pct(r.confidence)} · applied {clock(r.appliedAtMin)}
-                      </p>
-                    </li>
+              <Section title={`If we had acted ${counterfactual.minutesEarlier} min earlier`} aside={<Tag title="Computed by the AquaPulse engine">DERIVED</Tag>}>
+                <dl className="grid grid-cols-3 gap-x-3">
+                  {[
+                    ["As it stands", counterfactual.currentExposure],
+                    ["Acting earlier", counterfactual.counterfactualExposure],
+                    ["Avoidable", counterfactual.avoidableExposure],
+                  ].map(([label, v], i) => (
+                    <div key={label}>
+                      <dt className="text-[11px] text-muted">{label}</dt>
+                      <dd className={`tabular mt-0.5 text-[15px] ${i === 2 ? "font-medium text-ink" : "text-muted"}`}>
+                        <span className="text-[11px]">est. </span>
+                        {fmt(v as number)}
+                      </dd>
+                    </div>
                   ))}
-                </ul>
+                </dl>
+                <p className="mt-1.5 text-[11px] leading-snug text-faint">
+                  Est. {noun}, with {counterfactual.bundleLabel} applied earlier.
+                </p>
               </Section>
             )}
 
             {alerts.length > 0 && (
               <Section title="Alerts">
-                <ul className="space-y-2">
+                <ul className="space-y-3">
                   {alerts.map((a) => (
                     <li key={a.id} className="text-[13px]">
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 truncate text-ink">{a.audience}</span>
                         <Tag>{a.status}</Tag>
                       </div>
-                      <p className="leading-snug text-muted">{a.body}</p>
-                      <p className="tabular text-[11px] text-faint">
-                        {clock(a.tMin)} · {a.transport === "demo" ? "demo transport (simulated)" : "Twilio"}
+                      <p className="mt-0.5 leading-snug text-muted">{a.body}</p>
+                      <p className="tabular mt-0.5 flex items-center gap-1.5 text-[11px] text-faint">
+                        {clock(a.tMin)} · {a.transport === "demo" ? "demo transport" : "Twilio"}
+                        {a.transport === "demo" && <Tag title="Simulated transport: no message left this machine">SIM</Tag>}
                       </p>
                     </li>
                   ))}
                 </ul>
               </Section>
             )}
-
-            <Section title="Evidence" aside={<span className="tabular text-[11px] text-faint">{evidence.length} reports</span>}>
-              {evidence.length ? (
-                <ul>
-                  {evidence.slice(0, 3).map((e) => (
-                    <EvidenceItem key={e.id} e={e} full={false} />
-                  ))}
-                </ul>
-              ) : (
-                <Empty>No reports are attached to this incident yet.</Empty>
-              )}
-            </Section>
           </>
         )}
       </div>
@@ -616,7 +402,7 @@ export function IncidentDrawer({
               Simulate intervention
             </button>
             <button type="button" className={btnSecondary} onClick={() => onPanel(panel === "evidence" ? "incident" : "evidence")}>
-              {panel === "evidence" ? "Summary" : "View evidence"}
+              {panel === "evidence" ? "Summary" : `View evidence · ${evidence.length}`}
             </button>
             <button
               type="button"

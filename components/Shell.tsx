@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useReducer, useSyncExternalStore } from "react";
 import { engine } from "@/lib/engine";
 import { HORIZONS } from "@/lib/schemas/simulation";
-import { BottomStrip, DEMO_H, STRIP_H } from "./BottomStrip";
+import { BottomStrip, DEMO_H, STRIP_H, type Domain } from "./BottomStrip";
 import { CityPulse } from "./CityPulse";
 import { Header } from "./Header";
 import { IncidentDrawer } from "./IncidentDrawer";
@@ -16,11 +16,18 @@ const MapView = dynamic(() => import("./map/MapView"), { ssr: false });
 
 const noSubscribe = () => () => {};
 const demoQuery = () => new URLSearchParams(window.location.search).get("demo") === "1";
+// ?scenario=flood|scarcity|false-report preselects a demo scenario.
+const SCENARIO_PARAM: Record<string, string> = { flood: "flood-cascade", scarcity: "scarcity", "false-report": "false-report" };
+const scenarioQuery = () => SCENARIO_PARAM[new URLSearchParams(window.location.search).get("scenario") ?? ""] ?? null;
 
 export function Shell() {
   const [s, dispatch] = useReducer(reducer, undefined, initialState);
   const demoParam = useSyncExternalStore(noSubscribe, demoQuery, () => false);
-  const demoOpen = s.demo.open ?? demoParam;
+  const scenarioParam = useSyncExternalStore(noSubscribe, scenarioQuery, () => null);
+  const demoOpen = s.demo.open ?? (demoParam || scenarioParam != null);
+  useEffect(() => {
+    if (scenarioParam) dispatch({ type: "DEMO_SCENARIO", id: scenarioParam });
+  }, [scenarioParam]);
   const { world, horizon } = s;
   const hi = HORIZONS.indexOf(horizon);
 
@@ -48,6 +55,8 @@ export function Shell() {
   const counterfactual = useMemo(() => (incidentId ? safe(() => engine.counterfactual(world, incidentId, 30)) : null), [world, incidentId]);
   const fixFirst = s.mode === "fix-first";
   const priorities = useMemo(() => (fixFirst ? safe(() => engine.infraPriorities(world)) : null), [world, fixFirst]);
+  // The people-figure follows the mode, or the selected incident's kind when the mode is combined.
+  const domain: Domain = s.mode === "flood" || s.mode === "scarcity" ? s.mode : s.mode === "combined" && incident ? incident.kind : "combined";
 
   // ponytail: fixed 4 s per step at 1x; give DemoStep a duration if scenes need their own pacing.
   useEffect(() => {
@@ -83,6 +92,7 @@ export function Shell() {
       <MapView
         world={shownWorld}
         prediction={shownPreds[hi]}
+        baseline={basePreds[hi]}
         mode={s.mode}
         horizon={horizon}
         selectedIncidentId={s.selectedIncidentId}
@@ -93,7 +103,7 @@ export function Shell() {
         onSelectIncident={selectIncident}
         onSelectAsset={(id) => dispatch({ type: "SELECT_ASSET", id })}
       />
-      <Header getContext={getContext} demoOpen={demoOpen} onToggleDemo={() => dispatch({ type: "DEMO_OPEN", open: !demoOpen })} />
+      <Header getContext={getContext} hasIncident={incident != null} demoOpen={demoOpen} onToggleDemo={() => dispatch({ type: "DEMO_OPEN", open: !demoOpen })} />
       <CityPulse
         world={world}
         shown={shownPreds[hi]}
@@ -101,6 +111,8 @@ export function Shell() {
         comparing={comparing}
         horizon={horizon}
         mode={s.mode}
+        domain={domain}
+        topPriority={priorities?.[0] ?? null}
         selectedIncidentId={s.selectedIncidentId}
         onMode={(mode) => dispatch({ type: "SET_MODE", mode })}
         onSelectIncident={selectIncident}
@@ -109,6 +121,10 @@ export function Shell() {
         world={world}
         horizon={horizon}
         preds={shownPreds}
+        basePreds={basePreds}
+        comparing={comparing}
+        domain={domain}
+        fixFirst={fixFirst}
         comparison={comparable ? (s.previewBundle?.label ?? world.interventionRecords.at(-1)?.bundle.label ?? "Applied intervention") : null}
         compare={s.compare}
         notice={s.notice}
@@ -139,6 +155,7 @@ export function Shell() {
           key={incident.id}
           world={world}
           incident={incident}
+          scoreHistory={s.scoreHistory[incident.id]}
           panel={s.panel}
           horizon={horizon}
           basePreds={basePreds}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CircleCheck, CircleDashed, CircleX, CloudOff, CornerDownLeft, Droplets, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Brain, ChevronRight, CircleCheck, CircleDashed, CircleX, CloudOff, CornerDownLeft, Database, Droplets, FlaskConical, TriangleAlert, type LucideIcon } from "lucide-react";
 import { AskRequestSchema, AskResponseSchema, HealthResponseSchema, type AskResponse, type HealthResponse } from "@/lib/schemas/api";
 import { Skeleton, Tag } from "./ui";
 
@@ -26,41 +26,78 @@ function useHealth(): Health {
   return h;
 }
 
-function AwsIndicator({ health }: { health: Health }) {
-  let text = "AWS CHECKING";
-  let Icon: LucideIcon = CircleDashed;
-  let tone = "text-muted";
-  let title = "Checking /api/health";
-  if (health.status === "offline") {
-    [text, Icon, title] = ["AWS OFFLINE", CloudOff, health.detail];
-  } else if (health.status === "ok") {
-    const { state, detail, region } = health.data.aws;
-    title = [region, detail].filter(Boolean).join(" · ") || state;
-    if (state === "PASS") [text, Icon, tone] = ["AWS CONNECTED", CircleCheck, "text-verified"];
-    else if (state === "UNVERIFIED") [text, Icon] = ["AWS UNVERIFIED", CircleDashed];
-    else if (state === "NOT_CONFIGURED") [text, Icon] = ["AWS NOT CONFIGURED", TriangleAlert];
-    else [text, Icon, tone] = ["AWS FAILED", CircleX, "text-flood-high"];
-  }
+/** One "LABEL value" status chip: icon and text carry the state, colour only repeats it. */
+function Chip({ icon: Icon, label, value, title, tone = "text-ink" }: { icon: LucideIcon; label: string; value: string; title?: string; tone?: string }) {
   return (
-    <Tag title={title} className={`h-6 ${tone}`}>
-      <Icon size={12} aria-hidden />
-      {text}
+    <Tag title={title} className="h-6">
+      <Icon size={12} aria-hidden className={tone} />
+      <span className="text-faint">{label}</span>
+      <span className={tone}>{value}</span>
     </Tag>
+  );
+}
+
+function StatusChips({ health }: { health: Health }) {
+  // The city feed is the seeded demo world, so the mode is never called live.
+  const mode = <Chip icon={FlaskConical} label="Mode" value="Simulation" title="Seeded demo world: infrastructure, demographics and history are simulated" />;
+  if (health.status === "loading") {
+    return (
+      <>
+        {mode}
+        <Chip icon={CircleDashed} label="AWS" value="Checking" tone="text-muted" />
+      </>
+    );
+  }
+  if (health.status === "offline") {
+    return (
+      <>
+        {mode}
+        <Chip icon={CloudOff} label="AWS" value="Unavailable" tone="text-muted" title={`AWS UNAVAILABLE · deterministic demo engine active (${health.detail})`} />
+        <span className="hidden whitespace-nowrap text-[11px] text-faint xl:inline">deterministic demo engine active</span>
+      </>
+    );
+  }
+  const { aws, ai, db } = health.data;
+  const awsChip: [LucideIcon, string, string] =
+    aws.state === "PASS"
+      ? [CircleCheck, "Connected", "text-verified"]
+      : aws.state === "UNVERIFIED"
+        ? [CircleDashed, "Unverified", "text-muted"]
+        : aws.state === "NOT_CONFIGURED"
+          ? [TriangleAlert, "Not configured", "text-muted"]
+          : [CircleX, "Unavailable", "text-muted"];
+  return (
+    <>
+      {mode}
+      <Chip icon={awsChip[0]} label="AWS" value={awsChip[1]} tone={awsChip[2]} title={[aws.region, aws.state === "FAIL" ? "deterministic demo engine active" : null].filter(Boolean).join(" · ") || aws.state} />
+      <Chip icon={Brain} label="AI" value={ai.observer} tone={ai.observer === "none" ? "text-muted" : "text-ink"} title={ai.modelId ?? `Evidence observer: ${ai.observer} (${ai.state})`} />
+      <Chip icon={Database} label="DB" value={db.adapter} title={db.adapter === "memory" ? "Running in memory mode" : `Supabase (${db.state})`} />
+    </>
   );
 }
 
 const SUGGESTIONS = [
   "Why is this area critical?",
   "What happens in 30 minutes?",
-  "Which action protects the most people?",
-  "Why did AquaPulse choose Drain D104?",
+  "Why did this intervention win?",
+  "Which infrastructure should we fix first?",
   "Where should Tanker T02 go?",
-  "What infrastructure should Bengaluru fix first?",
 ];
 
-type Ask = { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "done"; data: AskResponse };
+/** Which kinds of engine output a question draws on, by question type. */
+function sourceTags(question: string, bedrock: boolean): string[] {
+  const q = question.toLowerCase();
+  return [
+    "Simulation",
+    ...(/critical|evidence|report|verif|confirm/.test(q) ? ["Evidence"] : []),
+    ...(/fix|infrastructure|drain|pipe|tanker|upgrade|intervention|asset/.test(q) ? ["Infrastructure"] : []),
+    ...(bedrock ? ["AWS"] : []),
+  ];
+}
 
-function AskAquaPulse({ getContext }: { getContext: () => Record<string, unknown> }) {
+type Ask = { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "done"; question: string; data: AskResponse };
+
+function AskAquaPulse({ getContext, hasIncident }: { getContext: () => Record<string, unknown>; hasIncident: boolean }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [ask, setAsk] = useState<Ask>({ status: "idle" });
@@ -79,7 +116,7 @@ function AskAquaPulse({ getContext }: { getContext: () => Record<string, unknown
       if (!r.ok) throw new Error(`/api/ask returned ${r.status}`);
       const parsed = AskResponseSchema.safeParse(await r.json());
       if (!parsed.success) throw new Error("/api/ask returned an unexpected shape");
-      if (mine === seq.current) setAsk({ status: "done", data: parsed.data });
+      if (mine === seq.current) setAsk({ status: "done", question, data: parsed.data });
     } catch (e) {
       if (mine === seq.current) setAsk({ status: "error", message: e instanceof Error ? e.message : "request failed" });
     }
@@ -88,7 +125,7 @@ function AskAquaPulse({ getContext }: { getContext: () => Record<string, unknown
   return (
     <div
       ref={root}
-      className="relative w-[380px]"
+      className="relative min-w-0 max-w-[340px] flex-1"
       onBlur={(e) => {
         if (!root.current?.contains(e.relatedTarget)) setOpen(false);
       }}
@@ -104,21 +141,22 @@ function AskAquaPulse({ getContext }: { getContext: () => Record<string, unknown
           void submit(q);
         }}
       >
+        <ChevronRight size={14} aria-hidden className="ml-1.5 shrink-0 text-faint" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setOpen(true)}
           maxLength={400}
-          placeholder="Ask AquaPulse about the city right now"
+          placeholder={hasIncident ? "Ask AquaPulse about this incident…" : "Ask AquaPulse about the city…"}
           aria-label="Ask AquaPulse"
-          className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] text-ink outline-none placeholder:text-faint"
+          className="tabular h-full min-w-0 flex-1 bg-transparent px-1.5 text-[13px] text-ink outline-none placeholder:font-sans placeholder:text-faint"
         />
         <button type="submit" aria-label="Send question" className="flex h-full w-8 items-center justify-center text-muted hover:text-ink">
           <CornerDownLeft size={14} aria-hidden />
         </button>
       </form>
       {open && (
-        <div id="ask-panel" className="absolute left-0 top-10 z-30 w-[460px] border border-hairline bg-panel p-3">
+        <div id="ask-panel" className="absolute right-0 top-10 z-30 w-[460px] border border-hairline bg-panel p-3">
           <div aria-live="polite">
             {ask.status === "loading" && <Skeleton lines={3} />}
             {ask.status === "error" && (
@@ -130,10 +168,15 @@ function AskAquaPulse({ getContext }: { getContext: () => Record<string, unknown
             {ask.status === "done" && (
               <div>
                 <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{ask.data.answer}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <Tag title={ask.data.modelId}>{ask.data.source === "bedrock" ? "Bedrock" : "Template answer from simulation data"}</Tag>
-                  <span className="text-[11px] text-faint">{ask.data.source === "bedrock" ? "Explains engine output; numbers come from the engine." : "Not AI-generated."}</span>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.06em] text-faint">Sources</span>
+                  {sourceTags(ask.question, ask.data.source === "bedrock").map((t) => (
+                    <Tag key={t}>{t}</Tag>
+                  ))}
                 </div>
+                <p className="mt-1.5 text-[11px] text-faint" title={ask.data.modelId}>
+                  {ask.data.source === "bedrock" ? "Bedrock explains engine output; every number comes from the engine." : "Template answer from simulation data. Not AI-generated."}
+                </p>
               </div>
             )}
           </div>
@@ -157,39 +200,37 @@ function AskAquaPulse({ getContext }: { getContext: () => Record<string, unknown
 
 export function Header({
   getContext,
+  hasIncident,
   demoOpen,
   onToggleDemo,
 }: {
   getContext: () => Record<string, unknown>;
+  hasIncident: boolean;
   demoOpen: boolean;
   onToggleDemo: () => void;
 }) {
   const health = useHealth();
   return (
-    <header className="absolute inset-x-0 top-0 z-20 flex h-12 items-center gap-4 border-b border-hairline bg-panel px-4">
-      <div className="flex items-center gap-2">
+    <header className="absolute inset-x-0 top-0 z-20 flex h-12 items-center gap-3 border-b border-hairline bg-panel px-4">
+      <div className="flex shrink-0 items-center gap-2">
         <Droplets size={16} aria-hidden className="text-flood-low" />
         <h1 className="text-[15px] font-semibold tracking-tight text-ink">AquaPulse</h1>
+        <p className="hidden whitespace-nowrap text-[13px] text-muted lg:block">Bengaluru Water Intelligence</p>
       </div>
-      <p className="hidden truncate text-[13px] text-muted xl:block">AI Decision Engine for a Safer, Water-Resilient Bengaluru</p>
-      <div className="flex items-center gap-1.5">
-        <Tag>Bengaluru</Tag>
-        {/* The city feed is a seeded simulation, so it is not labelled LIVE. */}
-        <Tag>Simulated feed</Tag>
+      <p className="hidden whitespace-nowrap border-l border-hairline pl-3 text-[13px] text-faint min-[1700px]:block">
+        AI Decision Engine for a Safer, Water-Resilient Bengaluru
+      </p>
+      <div className="min-w-0 flex-1" />
+      <AskAquaPulse getContext={getContext} hasIncident={hasIncident} />
+      <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label="System status">
+        <StatusChips health={health} />
       </div>
-      <div className="flex-1" />
-      <AskAquaPulse getContext={getContext} />
-      {health.status === "ok" && (
-        <span className="tabular shrink-0 whitespace-nowrap text-[11px] uppercase tracking-[0.06em] text-faint" title={health.data.ai.modelId ?? health.data.ai.detail}>
-          AI {health.data.ai.observer} · DB {health.data.db.adapter}
-        </span>
-      )}
-      <AwsIndicator health={health} />
       <button
         type="button"
         onClick={onToggleDemo}
         aria-pressed={demoOpen}
-        className={`h-6 border px-2 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors duration-150 ${
+        title="Show or hide the demo controls"
+        className={`h-6 shrink-0 border px-2 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors duration-150 ${
           demoOpen ? "border-ink bg-ink text-surface" : "border-hairline text-muted hover:text-ink"
         }`}
       >

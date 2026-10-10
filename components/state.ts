@@ -149,6 +149,16 @@ function step(s: State, a: Action): State {
     case "SET_COMPARE":
       return { ...s, compare: a.compare };
     case "COMMIT": {
+      // During a demo, the scenario's next step may itself be "apply the bundle". A manual Apply then counts as
+      // that step, so the scenario cannot apply a second bundle on top of the operator's choice.
+      const pending = s.demo.stepIndex > 0 ? currentScenario(s)?.steps[s.demo.stepIndex] : undefined;
+      const scripted = pending ? safe(() => playStep(s.world, pending)) : null;
+      if (pending && scripted && scripted.interventionRecords.length > s.world.interventionRecords.length) {
+        const sameBundle = scripted.interventionRecords.at(-1)?.bundle.label === a.bundle.label;
+        if (sameBundle) return step(s, { type: "DEMO_NEXT" });
+        const manual = step({ ...s, demo: { ...s.demo, stepIndex: 0 } }, a);
+        return { ...manual, demo: { ...s.demo, stepIndex: s.demo.stepIndex + 1 } };
+      }
       const id = s.selectedIncidentId;
       const next = id ? safe(() => engine.commitBundle(s.world, id, a.bundle)) : null;
       if (!next) return { ...s, notice: `Engine: could not apply "${a.bundle.label}".` };

@@ -3,13 +3,25 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Pause, Play, RotateCcw, SkipForward, TriangleAlert } from "lucide-react";
 import type { StreamEntry, WorldState } from "@/lib/schemas/domain";
-import { HORIZONS, type DemoScenario, type Horizon, type Prediction } from "@/lib/schemas/simulation";
+import { HORIZONS, type DemoScenario, type Horizon, type Prediction, type PredictionTotals } from "@/lib/schemas/simulation";
 import { scenarios } from "@/lib/demo";
 import type { State } from "./state";
+import { PREDICTED, bandCss, riskBand, type RiskDomain } from "./risk";
 import { Empty, Label, ProvTag, Segmented, Tag, clock, fmt, horizonLabel, iconBtn } from "./ui";
 
 export const STRIP_H = 184;
-export const DEMO_H = 68;
+export const DEMO_H = 37;
+
+/** Which people-figure the app is talking about: follows the mode, or the selected incident's kind. */
+export type Domain = RiskDomain | "combined";
+export const figureOf = (t: PredictionTotals, d: Domain) =>
+  d === "flood" ? t.exposedPopulation : d === "scarcity" ? t.populationShort : t.exposedPopulation + t.populationShort;
+export const FIGURE_LABEL: Record<Domain, string> = { flood: "est. exposed", scarcity: "est. short of water", combined: "est. people affected" };
+/** Peak risk in the domain; combined takes the worse of the two. */
+export const peakOf = (t: PredictionTotals, d: Domain): { risk: number; domain: RiskDomain } =>
+  d === "flood" || (d === "combined" && t.maxFloodRisk >= t.maxScarcityRisk)
+    ? { risk: t.maxFloodRisk, domain: "flood" }
+    : { risk: t.maxScarcityRisk, domain: "scarcity" };
 
 function DemoControls({
   demo,
@@ -31,19 +43,20 @@ function DemoControls({
   const total = scenario?.steps.length ?? 0;
   const done = demo.stepIndex >= total;
   const last = scenario?.steps[demo.stepIndex - 1];
+  const btn = `${iconBtn} !h-6 !w-6`;
   return (
-    <div className="flex flex-col justify-center gap-1.5 border-b border-hairline px-4" style={{ height: DEMO_H }} role="group" aria-label="Demo controls">
-     <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 border-b border-hairline px-4 text-[11px]" style={{ height: DEMO_H }} role="group" aria-label="Demo controls">
       <Label>Demo</Label>
       {scenarios.length === 0 ? (
-        <span className="text-[13px] text-faint">No scenarios are loaded yet. They appear here when the demo data is ready.</span>
+        <span className="text-faint">No scenarios are loaded yet.</span>
       ) : (
         <>
           <select
             aria-label="Scenario"
+            title="Scenario"
             value={scenario?.id ?? ""}
             onChange={(e) => onScenario(e.target.value)}
-            className="h-7 border border-hairline bg-panel px-2 text-[13px] text-ink"
+            className="h-6 max-w-[240px] border border-hairline bg-panel px-1.5 text-[11px] text-ink"
           >
             {scenarios.map((s) => (
               <option key={s.id} value={s.id}>
@@ -51,37 +64,110 @@ function DemoControls({
               </option>
             ))}
           </select>
-          <button type="button" className={iconBtn} disabled={done} onClick={() => onPlay(!demo.playing)} aria-label={demo.playing ? "Pause" : "Play"}>
-            {demo.playing ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
+          <button type="button" className={btn} onClick={onReset} aria-label="Reset scenario" title="Reset scenario">
+            <RotateCcw size={12} aria-hidden />
           </button>
-          <button type="button" className={iconBtn} disabled={done} onClick={onNext} aria-label="Next event">
-            <SkipForward size={13} aria-hidden />
+          <button type="button" className={btn} disabled={done} onClick={() => onPlay(!demo.playing)} aria-label={demo.playing ? "Pause" : "Play"} title={demo.playing ? "Pause" : "Play"}>
+            {demo.playing ? <Pause size={12} aria-hidden /> : <Play size={12} aria-hidden />}
           </button>
-          <button type="button" className={iconBtn} onClick={onReset} aria-label="Reset scenario">
-            <RotateCcw size={13} aria-hidden />
+          <button type="button" className={btn} disabled={done} onClick={onNext} aria-label="Next event" title="Next event">
+            <SkipForward size={12} aria-hidden />
           </button>
           <Segmented
             label="Playback speed"
             value={demo.speed}
             onChange={onSpeed}
-            className="h-7 w-[72px]"
+            className="h-6 w-[64px]"
             options={[
               { value: 1, label: "1x" },
               { value: 4, label: "4x" },
             ]}
           />
-          <span className="tabular text-[11px] text-muted">
+          <span className="tabular shrink-0 text-muted">
             {demo.stepIndex} / {total}
           </span>
-          <span className="min-w-0 truncate text-[13px] font-medium text-ink">{last?.label}</span>
+          <p className="min-w-0 flex-1 truncate text-[13px] text-muted" aria-live="polite" title={last?.narration}>
+            {last ? (
+              <>
+                <span className="font-medium text-ink">{last.label}</span> · {last.narration}
+              </>
+            ) : (
+              `Press Play or Next event to start ${scenario?.name ?? "the scenario"}.`
+            )}
+          </p>
         </>
       )}
-     </div>
-      {scenarios.length > 0 && (
-        <p className="truncate text-[13px] text-muted" aria-live="polite" title={last?.narration}>
-          {last ? last.narration : `Press Play or Next event to start ${scenario?.name ?? "the scenario"}.`}
-        </p>
-      )}
+    </div>
+  );
+}
+
+/** A real time axis: four engine-computed stops, no in-between frames. */
+function Timeline({
+  horizon,
+  preds,
+  basePreds,
+  comparing,
+  domain,
+  onHorizon,
+}: {
+  horizon: Horizon;
+  preds: (Prediction | null)[];
+  basePreds: (Prediction | null)[];
+  comparing: boolean;
+  domain: Domain;
+  onHorizon: (h: Horizon) => void;
+}) {
+  const fig = preds.map((p) => (p ? figureOf(p.totals, domain) : null));
+  const ghost = comparing ? basePreds.map((p) => (p ? figureOf(p.totals, domain) : null)) : null;
+  const max = Math.max(1, ...[...fig, ...(ghost ?? [])].map((v) => v ?? 0));
+  const h100 = (v: number | null) => `${Math.max(4, ((v ?? 0) / max) * 100)}%`;
+  const move = (e: React.KeyboardEvent, i: number) => {
+    const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = (i + d + HORIZONS.length) % HORIZONS.length;
+    onHorizon(HORIZONS[next]);
+    (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+  };
+  return (
+    <div role="radiogroup" aria-label="Prediction horizon" className="grid grid-cols-4">
+      {HORIZONS.map((h, i) => {
+        const on = h === horizon;
+        const p = preds[i];
+        const peak = p ? peakOf(p.totals, domain) : null;
+        const label = h === 0 ? "NOW" : `${horizonLabel(h)}m`;
+        return (
+          <button
+            key={h}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={`${label}${h ? " predicted" : ""}: ${FIGURE_LABEL[domain]} ${fig[i] == null ? "unavailable" : fmt(fig[i]!)}${peak ? `, peak risk ${riskBand(peak.risk).label}` : ""}`}
+            tabIndex={on ? 0 : -1}
+            onClick={() => onHorizon(h)}
+            onKeyDown={(e) => move(e, i)}
+            className={`flex flex-col items-center pb-1 pt-1.5 transition-colors duration-150 focus-visible:z-10 ${on ? "bg-panel-raised" : "hover:bg-panel-raised/50"}`}
+          >
+            <span className="relative flex h-11 w-full items-end justify-center" aria-hidden>
+              {ghost && <span className="absolute bottom-0 w-[18px] border border-b-0 border-muted" style={{ height: h100(ghost[i]) }} />}
+              <span
+                className="relative w-2.5 transition-[height] duration-300 ease-out"
+                style={{
+                  height: h100(fig[i]),
+                  background: peak ? bandCss(peak.risk, peak.domain) : "var(--color-faint)",
+                  outline: h > 0 ? `1px dashed rgb(${PREDICTED.join(" ")})` : undefined,
+                  outlineOffset: 1,
+                }}
+              />
+            </span>
+            <span className={`relative h-2 w-full border-t ${on ? "border-ink" : "border-hairline"}`} aria-hidden>
+              <span className={`absolute left-1/2 top-0 w-px ${on ? "h-2 bg-ink" : "h-1.5 bg-faint"}`} />
+            </span>
+            <span className={`tabular text-[11px] uppercase tracking-[0.06em] ${on ? "font-medium text-ink" : h > 0 ? "text-predicted" : "text-muted"}`}>{label}</span>
+            <span className={`tabular text-[11px] ${on ? "text-ink" : "text-muted"}`}>{fig[i] == null ? "—" : fmt(fig[i]!)}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -116,6 +202,10 @@ export function BottomStrip({
   world,
   horizon,
   preds,
+  basePreds,
+  comparing,
+  domain,
+  fixFirst,
   comparison,
   compare,
   notice,
@@ -133,6 +223,12 @@ export function BottomStrip({
   horizon: Horizon;
   /** Shown prediction per horizon, same order as HORIZONS. */
   preds: (Prediction | null)[];
+  /** Without-intervention prediction per horizon. */
+  basePreds: (Prediction | null)[];
+  /** True while the WITH side of a comparison is on screen. */
+  comparing: boolean;
+  domain: Domain;
+  fixFirst: boolean;
   /** Label of the intervention being compared, or null when there is nothing to compare. */
   comparison: string | null;
   compare: "with" | "without";
@@ -153,38 +249,33 @@ export function BottomStrip({
     <div className="absolute bottom-0 z-10 border-t border-hairline bg-panel" style={{ left, right }}>
       {demoOpen && <DemoControls demo={demo} scenario={scenario} {...demoActions} />}
       <div className="flex" style={{ height: STRIP_H }}>
-        <section aria-label="Timeline" className="flex w-[336px] shrink-0 flex-col gap-2 border-r border-hairline px-4 py-3">
+        <section aria-label="Timeline" className="flex w-[336px] shrink-0 flex-col gap-1.5 border-r border-hairline px-4 py-3">
           <div className="flex items-center justify-between">
-            <Label>Timeline</Label>
+            <Label>{fixFirst ? "Prevention" : "Timeline"}</Label>
             <span className="tabular text-[11px] text-muted">Scenario clock {clock(world.tMin)}</span>
           </div>
-          <Segmented
-            label="Prediction horizon"
-            value={horizon}
-            onChange={onHorizon}
-            options={HORIZONS.map((h, i) => ({
-              value: h,
-              label: h === 0 ? "NOW" : `${horizonLabel(h)}m`,
-              sub: preds[i] ? `est. ${fmt(preds[i]!.totals.exposedPopulation)}` : "—",
-            }))}
-          />
-          <p className="flex items-center gap-1.5 text-[11px] text-faint">
-            <span aria-hidden className={`h-2.5 w-2.5 border ${horizon > 0 ? "border-dashed border-predicted" : "border-faint"}`} />
-            {horizon > 0 ? "Violet outline = predicted. Figures: est. exposed." : "Current state. Figures: est. people exposed."}
-          </p>
-          {comparison && (
-            <div>
-              <Segmented
-                label="Intervention comparison"
-                value={compare}
-                onChange={onCompare}
-                options={[
-                  { value: "without", label: "Without" },
-                  { value: "with", label: "With intervention" },
-                ]}
-              />
-              <p className="mt-1 truncate text-[11px] text-muted">{comparison}</p>
-            </div>
+          {fixFirst ? (
+            <p className="text-[13px] leading-snug text-muted">
+              Emergency response fixes today. <span className="text-ink">AquaPulse learns what Bengaluru should fix permanently.</span>
+            </p>
+          ) : (
+            <>
+              <Timeline horizon={horizon} preds={preds} basePreds={basePreds} comparing={comparing} domain={domain} onHorizon={onHorizon} />
+              {!comparison && <p className="truncate text-[11px] text-faint">{FIGURE_LABEL[domain]} · bar colour = peak risk band</p>}
+              {comparison && (
+                <div title={comparison}>
+                  <Segmented
+                    label={`Intervention comparison: ${comparison}`}
+                    value={compare}
+                    onChange={onCompare}
+                    options={[
+                      { value: "without", label: "Without" },
+                      { value: "with", label: "With intervention" },
+                    ]}
+                  />
+                </div>
+              )}
+            </>
           )}
           {notice && (
             <p role="alert" className="flex items-center gap-1.5 text-[11px] text-ink">
