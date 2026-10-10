@@ -34,6 +34,8 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias
 | Demo routes after the change | PASS (local build) | `/?demo=1`: flood 14/14 with 3,822 → 190 and PROTECTED, scarcity 6/6, false report UNVERIFIED · 14/100 |
 | Scheduler | PARTIAL | No cron: the server refreshes after a read when the last sync is older than 10 minutes. With no visitors nothing syncs. A forced sync route exists behind the server secret |
 | IMD JSON APIs, MOSDAC, CWC station feed | BLOCKED / deferred | See `docs/NATIONAL_DATA_SOURCES.md` |
+| Public national view | PASS | 2026-10-11 01:52 IST: public site opened on India at both sizes with zero console errors; the public server refreshed the feed by itself (last sync moved from 01:41 to 01:51 IST); `/?demo=1` flood still 14/14 with 3,822 → 190 and PROTECTED |
+| Landing page | PASS (local build) | `/` renders in about 1 s with live figures; CTA opens `/live`; demo links still open the command center; no horizontal scroll at 390 px |
 
 ## Demo / simulated (by design, labelled in the UI)
 

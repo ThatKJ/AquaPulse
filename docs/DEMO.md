@@ -1,6 +1,6 @@
 # Demo
 
-**Public:** https://aquapulse-liard.vercel.app/?demo=1 · direct links `&scenario=flood`, `scarcity`, `false-report`
+**Public:** landing https://aquapulse-liard.vercel.app · live India view `/live` · demo https://aquapulse-liard.vercel.app/?demo=1 · direct links `&scenario=flood`, `scarcity`, `false-report`
 **Local fallback:** `npm run build && npm run start` → http://localhost:3100/?demo=1 (needs no network, AWS or database)
 
 Controls: Space play/pause · → next event · R reset (click the map first so no control has focus). Use a 1440x900 or 1920x1080 window.

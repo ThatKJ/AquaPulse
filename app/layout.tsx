@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "AquaPulse",
-  description: "AI Decision Engine for a Safer, Water-Resilient Bengaluru",
+  description: "India’s water intelligence layer: official alerts, citizen evidence and a local decision model.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

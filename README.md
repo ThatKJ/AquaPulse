@@ -5,7 +5,7 @@ AquaPulse is a water-risk intelligence system for India that combines official a
 - **National:** current official alerts (NDMA SACHET: IMD, CWC, state authorities) on a district map of India, with an explainable derived risk score.
 - **Local:** a HydroTwin of south-east Bengaluru that predicts flood and scarcity, ranks interventions and learns which infrastructure to fix first. Its city data is a labelled simulation.
 
-**Live:** https://aquapulse-liard.vercel.app (India, current conditions) · local demo `/?demo=1` · scenarios: `&scenario=flood`, `scarcity`, `false-report` · shortcuts: Space play/pause, → next, R reset.
+**Live:** https://aquapulse-liard.vercel.app (landing) · command center `/live` (India, current conditions) · local demo `/?demo=1` · scenarios: `&scenario=flood`, `scarcity`, `false-report` · shortcuts: Space play/pause, → next, R reset.
 
 It answers what is happening, what happens next, why, who gets hurt, what to do, what that changes, whether it worked, and what the city should permanently fix.
 

@@ -221,7 +221,7 @@ export function Header({
         <h1 className="text-[15px] font-semibold tracking-tight text-ink">AquaPulse</h1>
         <p className="hidden items-center gap-1.5 whitespace-nowrap text-[13px] text-muted lg:flex">
           {/* The local HydroTwin sits under the national view: India › Karnataka › Bengaluru. */}
-          <button type="button" className="hover:text-ink" onClick={() => window.location.assign("/")}>
+          <button type="button" className="hover:text-ink" onClick={() => window.location.assign("/live")}>
             India
           </button>
           <span className="text-faint">›</span>
