@@ -44,3 +44,4 @@ next-env.d.ts
 !.env.example
 .playwright-mcp/
 .impeccable/
+infra/ai-lambda/dist/

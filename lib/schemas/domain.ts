@@ -34,7 +34,7 @@ export type ScarcityFactors = {
 };
 
 export type HydroCell = {
-  /** H3 index, resolution 8. */
+  /** H3 index, resolution 9. */
   id: string;
   center: LngLat;
   /** Elevation proxy 0..1, higher = higher ground. Water flows to lower neighbours. */

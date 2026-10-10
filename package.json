@@ -14,7 +14,8 @@
     "verify:bedrock": "tsx scripts/verify-bedrock.ts",
     "verify:db": "tsx scripts/verify-db.ts",
     "demo:reset": "tsx scripts/reset-demo.ts",
-    "check": "tsc --noEmit && eslint && vitest run && next build"
+    "check": "tsc --noEmit && eslint && vitest run && next build",
+    "selfcheck": "tsx scripts/selfcheck.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock": "^3.1149.0",

@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AquaPulse AI endpoint: one Lambda (Node 22) behind a Function URL. It runs Bedrock Converse with a
+  Rekognition DetectLabels fallback. Callers must send the shared secret in x-aquapulse-secret.
+
+Parameters:
+  EndpointSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 24
+    Description: Shared secret the web host sends as x-aquapulse-secret (AI_ENDPOINT_SECRET).
+  BedrockModelId:
+    Type: String
+    Default: ""
+    Description: Bedrock model or inference-profile id from `npm run verify:bedrock`. Blank = Rekognition only.
+  ReservedConcurrency:
+    Type: Number
+    Default: 2
+    Description: >
+      Cap on concurrent executions (cost and abuse guard). Use -1 for no reservation: accounts whose
+      total concurrency limit is 10 cannot reserve any.
+
+Conditions:
+  HasModel: !Not [!Equals [!Ref BedrockModelId, ""]]
+  Reserve: !Not [!Equals [!Ref ReservedConcurrency, -1]]
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-fn"
+      RetentionInDays: 14
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: aquapulse-ai
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Converse
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  # Cross-region inference profiles route to foundation models in other regions.
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*"
+              - Sid: Labels
+                Effect: Allow
+                Action: rekognition:DetectLabels
+                Resource: "*" # DetectLabels has no resource-level permissions
+              - Sid: OwnLogs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${LogGroup.Arn}:*"
+
+  Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-fn"
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt Role.Arn
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !If [Reserve, !Ref ReservedConcurrency, !Ref "AWS::NoValue"]
+      LoggingConfig:
+        LogGroup: !Ref LogGroup
+      Environment:
+        Variables:
+          AI_ENDPOINT_SECRET: !Ref EndpointSecret
+          BEDROCK_MODEL_ID: !If [HasModel, !Ref BedrockModelId, !Ref "AWS::NoValue"]
+      Code:
+        # Placeholder so the stack needs no S3 bucket. deploy.sh uploads the real bundle with update-function-code.
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ requestId: "placeholder", error: { code: "NOT_DEPLOYED", message: "Code not uploaded yet; run infra/ai-lambda/deploy.sh." } }),
+          });
+
+  Url:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt Function.Arn
+      AuthType: NONE # the handler enforces the shared secret; the web host has no AWS identity to sign with
+
+  UrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Function
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  # Function URLs created since October 2025 also need lambda:InvokeFunction scoped to URL invocations.
+  UrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Function
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  FunctionName:
+    Value: !Ref Function
+  AiEndpointUrl:
+    Description: Set as AI_ENDPOINT_URL on the web host.
+    Value: !GetAtt Url.FunctionUrl
