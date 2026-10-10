@@ -31,20 +31,18 @@ export function Shell() {
   const { world, horizon } = s;
   const hi = HORIZONS.indexOf(horizon);
 
-  // Write-through mirror of engine state to the server (Supabase when configured, memory otherwise).
-  // Debounced and best-effort: the console never depends on it, so offline and demo runs are unaffected.
+  // Mirror the demo's progress to the server (Supabase when configured). The browser sends only the scenario id
+  // and step count; the server replays the deterministic scenario and writes the rows itself.
+  // Debounced and best-effort: the console never depends on it.
+  const mirrorScenario = currentScenario(s)?.id;
+  const mirrorStep = s.demo.stepIndex;
   useEffect(() => {
-    if (world.incidents.length === 0) return;
+    if (!mirrorScenario || mirrorStep < 1) return;
     const t = setTimeout(() => {
-      const body = {
-        incidents: world.incidents, // the server schema strips fields it does not store
-        evidence: world.evidence.map(({ id, channel, text, location, analysis, provenance }) => ({ id, channel, text, location, analysis, provenance })),
-        interventions: world.interventionRecords.map(({ id, incidentId, bundle, before, expected, observed, effectiveness, confidence, provenance }) => ({ id, incidentId, bundle, before, expected, observed, effectiveness, confidence, provenance })),
-      };
-      fetch("/api/state", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
+      fetch("/api/demo/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scenarioId: mirrorScenario, stepIndex: mirrorStep }) }).catch(() => {});
     }, 1500);
     return () => clearTimeout(t);
-  }, [world]);
+  }, [mirrorScenario, mirrorStep]);
 
   // Demo shortcuts: Space = play/pause, ArrowRight = next event, R = reset. Ignored while a control has focus.
   const playing = s.demo.playing;
