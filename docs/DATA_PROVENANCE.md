@@ -4,7 +4,7 @@ Every value on screen belongs to one of these classes. Nothing simulated is show
 
 | Class | Meaning | What is in it today |
 | --- | --- | --- |
-| LIVE_OFFICIAL | Fetched from an official feed, with its issue and fetch time | Official alerts from **NDMA SACHET** (issued by IMD offices, the Central Water Commission and state disaster authorities) |
+| LIVE_OFFICIAL | Fetched from an official feed, with its issue and fetch time | Official alerts from **NDMA SACHET** (issued by IMD offices, the Central Water Commission and state disaster authorities); **IMD district nowcasts** (three-hour outlooks) |
 | STATIC_OFFICIAL / open | Static reference data with a named source | District and state boundaries: geoBoundaries gbOpen IND ADM2 (ODbL 1.0; source Local Government Directory, Pathways Data) and ADM1 (CC BY 2.5 IN). Basemap in the local view: OpenFreeMap / OpenMapTiles / OpenStreetMap |
 | DERIVED | Computed by AquaPulse from the above | AquaPulse Composite Water Risk per district; counts in the national summary; district placement of an alert (by name matching); everything the local engine computes |
 | USER_REPORT | Sent by a person | Reports arriving at the report webhook; photos uploaded for analysis |
@@ -16,7 +16,9 @@ Every value on screen belongs to one of these classes. Nothing simulated is show
 - **Flood / rain / heat alert counts:** active official alerts by event type.
 - **Alerts not on the map:** active alerts whose area text names no district we could match. They are counted and not placed.
 - **AquaPulse water risk (0–100):** severity × urgency × certainty of the strongest water-related alert, scaled by how directly the event type bears on water, plus a small capped amount for further alerts. It is AquaPulse's own score, not a rating by IMD, CWC or NDMA.
-- **Confidence and coverage:** only one of four planned inputs is connected (official alerts). Nowcast rainfall, river condition and heat are UNKNOWN, shown as unknown, and lower confidence. They are never treated as zero.
+- **Nowcast contribution:** IMD's rain band for the district (light, moderate, heavy, very heavy) adds up to 60% of the risk the alert has not already claimed. The score never falls because the nowcast feed is present.
+- **Confidence and coverage:** two of four planned inputs can be known (official alerts; nowcast rain while its feed is current). River condition and heat are UNKNOWN, shown as unknown, and lower confidence. They are never treated as zero.
+- **Corroboration of a citizen report:** the district containing the report is compared with active official alerts and nowcasts of a compatible kind. NO_OFFICIAL_SIGNAL is never treated as evidence against the report. The suggested confidence change is advisory.
 - **A district with no colour** has no water-related alert placed on it. That is not a statement that it is safe.
 
 ## Freshness
@@ -25,4 +27,4 @@ The server pulls the feed at most every 10 minutes (single flight, recorded in `
 ## Known limits of placement
 The feed's polygon service is not publicly readable (HTTP 403), so alerts are placed by matching district names in the alert's area text within the named state. Spelling variants (for example Siddharthnagar, Farrukhabad, Ayodhya) and state-wide alerts ("9 districts of Uttarakhand") are not placed. On 2026-10-10, 20 of 25 active alerts were placed.
 
-Boundary depiction follows the geoBoundaries dataset and carries no endorsement of any territorial claim.
+The national outline follows the Survey of India depiction (via DataMeet, CC BY 4.0). District and state polygons are geoBoundaries and stop short of that outline in the north.

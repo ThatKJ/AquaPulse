@@ -18,7 +18,9 @@ const BY_ID = new Map(DISTRICTS.map((d) => [d.id, d]));
 const LOCAL_TWINS: Record<string, string> = { "76128533B76927648517269": "Bengaluru" };
 
 const SURFACE = "#0a0d10";
-const INDIA = new LngLatBounds([68, 6.5], [97.5, 36]);
+// Extent of the Survey of India depiction, including the islands.
+const INDIA = new LngLatBounds([67.5, 6.2], [97.8, 37.4]);
+const FIT = { top: 60, bottom: 56, left: 268, right: 24 };
 const ist = (iso: string | null | undefined, withDate = false) =>
   iso ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false, ...(withDate ? { day: "2-digit", month: "short" } : {}) }).format(new Date(iso)) + " IST" : "never";
 const ago = (iso: string | null | undefined, now: number) => {
@@ -75,12 +77,17 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         sources: {
           districts: { type: "geojson", data: "/geo/india-districts.geojson", promoteId: "id" },
           states: { type: "geojson", data: "/geo/india-states.geojson" },
+          // National outline as depicted by the Survey of India (DataMeet, CC BY 4.0). The district dataset stops
+          // short of it in the north, so the outline supplies the country's extent; no boundary is edited by hand.
+          outline: { type: "geojson", data: "/geo/india-outline-soi.geojson" },
         },
         layers: [
           { id: "bg", type: "background", paint: { "background-color": SURFACE } },
+          { id: "country-fill", type: "fill", source: "outline", paint: { "fill-color": "#121920" } },
           { id: "district-fill", type: "fill", source: "districts", paint: { "fill-color": "#121920", "fill-opacity": 1 } },
           { id: "district-line", type: "line", source: "districts", paint: { "line-color": "#1d262e", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.3, 7, 0.8] } },
           { id: "state-line", type: "line", source: "states", paint: { "line-color": "#3b4853", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.7, 7, 1.4] } },
+          { id: "country-line", type: "line", source: "outline", paint: { "line-color": "#4a5863", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 7, 1.6] } },
           {
             id: "district-focus", type: "line", source: "districts",
             paint: {
@@ -101,14 +108,19 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         ],
       },
       bounds: INDIA,
-      fitBoundsOptions: { padding: { top: 70, bottom: 60, left: 280, right: 40 } },
+      fitBoundsOptions: { padding: FIT },
       attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false,
       maxBounds: [[55, -2], [110, 44]],
     });
     map.current = m;
-    m.on("load", () => setReady(true));
+    m.on("load", () => {
+      // Fit again once the container has its final size: the first fit can run before layout settles.
+      m.resize();
+      m.fitBounds(INDIA, { padding: FIT, duration: 0 });
+      setReady(true);
+    });
     let hovered: string | null = null;
     const setHoverState = (id: string | null) => {
       if (hovered) m.setFeatureState({ source: "districts", id: hovered }, { hover: false });
@@ -156,7 +168,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     if (prev.current) m.setFeatureState({ source: "districts", id: prev.current }, { selected: false });
     prev.current = selected;
     if (!selected) {
-      m.fitBounds(INDIA, { padding: { top: 70, bottom: 60, left: 280, right: 40 }, duration: 900 });
+      m.fitBounds(INDIA, { padding: FIT, duration: 900 });
       return;
     }
     m.setFeatureState({ source: "districts", id: selected }, { selected: true });
@@ -174,7 +186,10 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
   const hov = hover ? BY_ID.get(hover.id) : null;
   const hovRisk = hover ? data?.districts[hover.id] : undefined;
   const src = data?.source;
-  const tone = src?.freshness === "CURRENT" ? "text-verified" : src?.freshness === "DELAYED" ? "text-flood-mid" : "text-flood-high";
+  // The headline status is the least fresh connected source: one stale feed makes the whole picture not CURRENT.
+  const ORDER = ["CURRENT", "DELAYED", "STALE", "OFFLINE"] as const;
+  const overall = data ? ORDER[Math.max(...data.sources.map((x) => ORDER.indexOf(x.freshness)))] : null;
+  const tone = overall === "CURRENT" ? "text-verified" : overall === "DELAYED" ? "text-flood-mid" : "text-flood-high";
 
   return (
     <main className="relative h-full w-full overflow-hidden bg-surface">
@@ -189,12 +204,18 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         <span className="flex-1" />
         {src ? (
           <>
-            <span className={`font-medium uppercase tracking-[0.08em] ${tone}`}>{src.freshness}</span>
+            <span className={`font-medium uppercase tracking-[0.08em] ${tone}`}>{overall}</span>
             <span className="text-muted">
               Updated <span className="mono text-ink">{ist(src.lastSuccessAt)}</span>
             </span>
             <span className="border-l border-hairline pl-4 text-muted">
-              <span className="uppercase tracking-[0.08em] text-faint">Source</span> NDMA SACHET · {ago(src.lastSuccessAt, now)}
+              <span className="uppercase tracking-[0.08em] text-faint">Sources</span>{" "}
+              {data?.sources.map((x, i) => (
+                <span key={x.id} title={`${x.organization} · ${x.freshness} · last sync ${ist(x.lastSuccessAt, true)}`}>
+                  {i > 0 && " · "}
+                  {x.id === "ndma-sachet" ? "NDMA" : "IMD"} {ago(x.lastSuccessAt, now)}
+                </span>
+              ))}
             </span>
           </>
         ) : (
@@ -233,6 +254,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
               <Stat n={data.summary.floodAlerts} label="flood and river alerts" />
               <Stat n={data.summary.rainAlerts} label="rain and storm alerts" />
               <Stat n={data.summary.heatAlerts} label="heat alerts" />
+              <Stat n={data.summary.districtsWithRainNowcast} label="districts with a rain nowcast" />
               <Stat n={data.summary.statesWithAlerts} label="states and UTs with active alerts" />
               {data.summary.unlocatedAlerts > 0 && <p className="pt-1 text-[11px] leading-snug text-faint">{data.summary.unlocatedAlerts} active alerts name no district we could match and are not on the map.</p>}
             </dl>
@@ -262,11 +284,17 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
 
         <div className="border-t border-hairline px-4 py-3 text-[11px] leading-snug">
           <Label>Data</Label>
-          <p className="mt-2 text-muted">
-            <span className="text-ink">NDMA SACHET</span> · official alerts from IMD, CWC and state authorities{src ? ` · ${ago(src.lastSuccessAt, now)}` : ""}
-          </p>
-          <p className="mt-1 text-faint">Rainfall, river gauges and heat are not connected: they count as unknown, not as zero.</p>
-          {src?.lastFailure && <p className="mt-1 text-flood-mid">Last sync problem: {src.lastFailure}</p>}
+          <ul className="mt-2 space-y-1.5">
+            {data?.sources.map((x) => (
+              <li key={x.id} className="text-muted">
+                <span className="text-ink">{x.name}</span> · {x.freshness.toLowerCase()} · {ago(x.lastSuccessAt, now)}
+                <span className="block text-faint">{x.id === "ndma-sachet" ? "Official alerts from IMD, CWC and state authorities" : "Three-hour district outlooks"} · {x.active} active</span>
+                {x.lastFailure && <span className="block text-flood-mid">Last sync problem: {x.lastFailure}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-faint">Measured rainfall, river gauges and heat are not connected: they count as unknown, not as zero.</p>
+          
         </div>
       </aside>
 
@@ -297,9 +325,9 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
                 </p>
               </>
             ) : (
-              <p className="mt-2 text-[13px] leading-snug text-muted">No water-related official alert is placed on this district right now. Conditions beyond official alerts are unknown to AquaPulse.</p>
+              <p className="mt-2 text-[13px] leading-snug text-muted">No water-related official alert or rain nowcast is placed on this district right now. Conditions beyond those two feeds are unknown to AquaPulse.</p>
             )}
-            <p className="mt-2 text-[11px] leading-snug text-faint">AquaPulse’s own derived score from official alerts. Not a rating by IMD, CWC or NDMA.</p>
+            <p className="mt-2 text-[11px] leading-snug text-faint">AquaPulse’s own derived score from official alerts and nowcasts. Not a rating by IMD, CWC or NDMA.</p>
           </div>
 
           {selRisk && (
@@ -309,7 +337,10 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
                 {selRisk.factors.map((f) => (
                   <div key={f.key} className="flex items-baseline justify-between gap-3 border-b border-hairline py-1.5 last:border-b-0">
                     <dt className="text-muted">{f.label}</dt>
-                    <dd className={f.state === "unknown" ? "text-faint" : "text-ink"}>{f.display}</dd>
+                    <dd className={`flex items-baseline gap-3 ${f.state === "unknown" ? "text-faint" : "text-ink"}`}>
+                      <span>{f.display}</span>
+                      {f.state === "known" && <span className="tabular w-8 text-right text-muted">+{f.contribution}</span>}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -376,7 +407,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
               </p>
             </>
           ) : (
-            <p className="mt-1.5 text-faint">No water-related official alert placed here.</p>
+            <p className="mt-1.5 text-faint">No water-related alert or rain nowcast placed here.</p>
           )}
         </div>
       )}
@@ -394,7 +425,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
           )}
         </nav>
         <span className="flex items-center gap-3 border-l border-hairline pl-4">
-          <span className="text-faint">Water risk from official alerts</span>
+          <span className="text-faint">AquaPulse water risk · official alerts and nowcast</span>
           {RISK_BANDS.slice(1).map((b) => (
             <span key={b.key} className="flex items-center gap-1">
               <span aria-hidden className="block h-2 w-2" style={{ background: `rgb(${b.flood.join(" ")})` }} />
@@ -408,7 +439,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         </span>
         <span className="flex-1" />
         {data && <span className="text-faint">{fmt(data.summary.activeAlerts)} active alerts · newest issued {ist(data.source.newestAlertAt)}</span>}
-        <span className="text-faint" title="Alerts: NDMA SACHET (CAP). Boundaries: geoBoundaries (ODbL / CC BY 2.5 IN). AquaPulse is not affiliated with or endorsed by NDMA, IMD or CWC.">
+        <span className="text-faint" title="Alerts: NDMA SACHET (CAP). Nowcasts: IMD. Districts and states: geoBoundaries (ODbL / CC BY 2.5 IN). National outline: Survey of India depiction via DataMeet (CC BY 4.0). AquaPulse is not affiliated with or endorsed by NDMA, IMD or CWC.">
           Sources and credits
         </span>
       </footer>

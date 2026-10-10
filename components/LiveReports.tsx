@@ -8,7 +8,9 @@ import type { Action } from "./state";
 import { Tag, iconBtn, pct } from "./ui";
 
 type LiveReport = { id: string; channel: EvidenceEvent["channel"]; text: string; receivedAt: string; lat?: number; lng?: number; analysis?: EvidenceAnalysis };
-type Notice = { report: LiveReport; evidenceId: string; placed: boolean };
+type Official = { corroborationStatus: "CORROBORATED" | "PARTIALLY_CORROBORATED" | "NO_OFFICIAL_SIGNAL" | "CONFLICTING"; confidenceDelta: number; reason: string };
+type Notice = { report: LiveReport; evidenceId: string; placed: boolean; official?: Official };
+const OFFICIAL_LABEL: Record<Official["corroborationStatus"], string> = { CORROBORATED: "Corroborated by official data", PARTIALLY_CORROBORATED: "Partly corroborated by official data", NO_OFFICIAL_SIGNAL: "No official signal", CONFLICTING: "Conflicts with official data" };
 
 const POLL_MS = 5000;
 const OBSERVER: Record<EvidenceAnalysis["source"], string> = { rekognition: "AWS Rekognition · live AWS", bedrock: "Amazon Bedrock · live AWS", fixture: "Recorded analysis" };
@@ -53,6 +55,16 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
               },
             });
           setNotices((n) => [...n.slice(-2), { report: r, evidenceId, placed }]);
+          // Deterministic comparison with official conditions for the same district. Advisory: it does not change the score.
+          if (placed) {
+            const kind = r.analysis && /dry|leak|burst/.test(r.analysis.incidentType) ? "scarcity" : "flood";
+            fetch(`/api/corroborate?lat=${r.lat}&lng=${r.lng}&kind=${kind}`, { cache: "no-store" })
+              .then((res) => (res.ok ? res.json() : null))
+              .then((official: Official | null) => {
+                if (official && !stop) setNotices((n) => n.map((x) => (x.report.id === r.id ? { ...x, official } : x)));
+              })
+              .catch(() => {});
+          }
         }
       } catch {
         // Offline or the feed is down: the console keeps running on the engine.
@@ -69,7 +81,7 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
   if (notices.length === 0) return null;
   return (
     <div className="absolute left-[296px] top-[60px] z-20 flex w-[348px] flex-col gap-2" aria-live="polite">
-      {notices.map(({ report: r, evidenceId, placed }) => {
+      {notices.map(({ report: r, evidenceId, placed, official }) => {
         const incident = world.incidents.find((i) => i.evidenceIds.includes(evidenceId));
         return (
           <section key={r.id} className="border border-hairline bg-panel px-3 py-2.5 text-[13px] motion-safe:animate-[fadein_.25s_ease-out]">
@@ -94,6 +106,13 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
                   ? `Fused into ${incident.id} by the normal rules · Evidence Score ${Math.round(incident.evidenceScore?.total ?? 0)}/100.`
                   : "Outside the demo district or not fusable; stored only."}
             </p>
+            {official && (
+              <p className="mt-1.5 border-t border-hairline pt-1.5 text-muted">
+                <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-ink">{OFFICIAL_LABEL[official.corroborationStatus]}</span>
+                {official.confidenceDelta !== 0 && <span className="tabular text-[11px]"> · suggested {official.confidenceDelta > 0 ? "+" : ""}{official.confidenceDelta} confidence</span>}
+                <span className="block">{official.reason}</span>
+              </p>
+            )}
             {incident && (
               <button type="button" className="mt-2 text-[11px] font-medium uppercase tracking-[0.06em] text-ink underline underline-offset-2" onClick={() => dispatch({ type: "SELECT_INCIDENT", id: incident.id })}>
                 Open {incident.id}

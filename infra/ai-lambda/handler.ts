@@ -43,8 +43,32 @@ async function route(path: string, body: unknown): Promise<object> {
   throw new Reject(404, "NOT_FOUND", "Unknown path.");
 }
 
+/** EventBridge Scheduler tick: ask the web app to refresh the national feeds. The app holds the sync logic and the lock. */
+async function scheduledIngest(requestId: string): Promise<Result> {
+  const start = Date.now();
+  const url = process.env.INGEST_URL;
+  const secret = process.env.INGEST_SECRET;
+  let status = 0;
+  let detail = "INGEST_URL or INGEST_SECRET is not set";
+  if (url && secret) {
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "x-aquapulse-secret": secret }, signal: AbortSignal.timeout(50_000) });
+      status = res.status;
+      detail = (await res.text()).slice(0, 300);
+    } catch (err) {
+      detail = err instanceof Error ? err.name : "fetch failed";
+    }
+  }
+  const ok = status >= 200 && status < 300;
+  logOp({ service: "ai-lambda", op: "scheduled-ingest", requestId, durationMs: Date.now() - start, status: ok ? "ok" : "error", httpStatus: status });
+  // Throwing marks the invocation failed, so the scheduler's retry policy applies.
+  if (!ok) throw new Error(`scheduled ingest failed: ${status} ${detail}`.slice(0, 200));
+  return { statusCode: 200, headers: { "content-type": "application/json" }, body: detail };
+}
+
 export async function handler(event: Event): Promise<Result> {
   const requestId = randomUUID();
+  if ((event as { source?: string }).source === "aquapulse.scheduler") return scheduledIngest(requestId);
   const start = Date.now();
   const path = (event.rawPath ?? "").replace(/\/+$/, "") || "/";
   const reply = (statusCode: number, body: object): Result => {

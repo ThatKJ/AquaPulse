@@ -20,7 +20,24 @@ Parameters:
       Cap on concurrent executions (cost and abuse guard). Use -1 for no reservation: accounts whose
       total concurrency limit is 10 cannot reserve any.
 
+  IngestUrl:
+    Type: String
+    Default: ""
+    Description: >
+      Full URL of the web app's scheduled-ingest route (…/api/ingest/national). Blank = no schedule is created.
+  IngestSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: The web app's WEBHOOK_SECRET, sent as x-aquapulse-secret by the scheduled tick.
+  IngestRateMinutes:
+    Type: Number
+    Default: 15
+    MinValue: 10
+    Description: Minutes between national feed refreshes.
+
 Conditions:
+  HasIngest: !Not [!Equals [!Ref IngestUrl, ""]]
   HasModel: !Not [!Equals [!Ref BedrockModelId, ""]]
   Reserve: !Not [!Equals [!Ref ReservedConcurrency, -1]]
 
@@ -81,6 +98,8 @@ Resources:
         Variables:
           AI_ENDPOINT_SECRET: !Ref EndpointSecret
           BEDROCK_MODEL_ID: !If [HasModel, !Ref BedrockModelId, !Ref "AWS::NoValue"]
+          INGEST_URL: !If [HasIngest, !Ref IngestUrl, !Ref "AWS::NoValue"]
+          INGEST_SECRET: !If [HasIngest, !Ref IngestSecret, !Ref "AWS::NoValue"]
       Code:
         # Placeholder so the stack needs no S3 bucket. deploy.sh uploads the real bundle with update-function-code.
         ZipFile: |
@@ -112,6 +131,47 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: "*"
       InvokedViaFunctionUrl: true
+
+  # Unattended refresh of the national feeds: EventBridge Scheduler invokes the function with a marker event,
+  # and the function calls the web app's secret-protected ingest route. The app's single-flight lock makes
+  # overlapping or retried ticks harmless.
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Condition: HasIngest
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: scheduler.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { "aws:SourceAccount": !Ref "AWS::AccountId" }
+      Policies:
+        - PolicyName: invoke-ingest
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt Function.Arn
+
+  IngestSchedule:
+    Type: AWS::Scheduler::Schedule
+    Condition: HasIngest
+    Properties:
+      Name: !Sub "${AWS::StackName}-national-ingest"
+      Description: Refresh AquaPulse national feeds (NDMA SACHET, IMD nowcast).
+      ScheduleExpression: !Sub "rate(${IngestRateMinutes} minutes)"
+      FlexibleTimeWindow: { Mode: "OFF" }
+      State: ENABLED
+      Target:
+        Arn: !GetAtt Function.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"source":"aquapulse.scheduler"}'
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+          MaximumEventAgeInSeconds: 600
 
 Outputs:
   FunctionName:

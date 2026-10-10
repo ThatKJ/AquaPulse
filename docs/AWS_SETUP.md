@@ -43,3 +43,14 @@ Stack `aquapulse-ai`, ap-south-1: function `aquapulse-ai-fn` (Node 22, 512 MB, 6
 - Verify: `npm run doctor` (reads the public site's `/api/health`, which reports the Lambda's identity and observer).
 - Remove: `aws cloudformation delete-stack --stack-name aquapulse-ai --region ap-south-1`.
 - The web host (Vercel) holds `AI_ENDPOINT_URL` and `AI_ENDPOINT_SECRET`; it has no AWS credentials.
+
+## 7. Scheduled national ingestion (prepared, not created)
+`infra/ai-lambda/template.yaml` adds, only when `INGEST_URL` is supplied:
+- `AWS::Scheduler::Schedule` `aquapulse-ai-national-ingest`, `rate(15 minutes)`, retry 2, max event age 10 min.
+- An IAM role assumed by `scheduler.amazonaws.com` (restricted to this account) with `lambda:InvokeFunction` on `aquapulse-ai-fn` only.
+- Two Lambda environment variables (`INGEST_URL`, `INGEST_SECRET`). The function's own role is unchanged.
+
+The tick invokes the existing function with `{"source":"aquapulse.scheduler"}`; the function POSTs to the web app's `/api/ingest/national` with the server secret. The app holds the sync logic and the single-flight lock, so overlapping or retried ticks are harmless.
+
+Deploy (after approval): `aws login`, then
+`PREVIEW=1 RESERVED_CONCURRENCY=-1 AI_ENDPOINT_SECRET=… INGEST_URL=https://aquapulse-liard.vercel.app/api/ingest/national INGEST_SECRET=… bash infra/ai-lambda/deploy.sh`, read the change set, then execute it with `CHANGE_SET=<name>`.

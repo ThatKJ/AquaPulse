@@ -37,6 +37,18 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias
 | Public national view | PASS | 2026-10-11 01:52 IST: public site opened on India at both sizes with zero console errors; the public server refreshed the feed by itself (last sync moved from 01:41 to 01:51 IST); `/?demo=1` flood still 14/14 with 3,822 → 190 and PROTECTED |
 | Landing page | PASS (local build) | `/` renders in about 1 s with live figures; CTA opens `/live`; demo links still open the command center; no horizontal scroll at 390 px |
 
+## Live operations round (2026-10-11, branch `ops`)
+
+| Area | State | Evidence |
+| --- | --- | --- |
+| IMD district nowcast (source 2) | PASS | Real fetch: 100 items stored. All had expired (issued 19:00 IST, valid to 22:00), so 0 were active at 02:15 IST and no district carried a nowcast contribution. Parser tested on the recorded real response |
+| National risk v2 | PASS | Two inputs: official alert and nowcast rain, each with its points contribution. With the nowcast feed current, coverage reads 2 of 4 and confidence 65%; river and heat stay UNKNOWN. Risk never falls when the second input arrives (tested) |
+| Per-source freshness | PASS | Header status is the least fresh source; each source shows its own age |
+| Citizen ↔ official corroboration | PASS (API and local UI) | Deterministic. A flood report at Muzaffarpur returned CORROBORATED (+10, CWC flood alert active); the same at Bengaluru returned NO_OFFICIAL_SIGNAL (0). The delta is advisory: the local Evidence Score is not changed by it. Not yet exercised with a real WhatsApp report |
+| Scheduled ingestion | BLOCKED on approval | `/api/ingest/national` (secret required: 401 without) refreshes both sources and respects the single-flight lock. EventBridge Scheduler resources are written in the Lambda template but not created; the AWS CLI session has also expired |
+| Boundary depiction | PARTIAL | A Survey-of-India-depiction national outline (DataMeet, CC BY 4.0) now draws the country's extent, verified visually. District polygons are still geoBoundaries 2021, which stop short of that outline in the north, so that area has no district detail |
+| n8n, Twilio, WhatsApp inbound | BLOCKED | No n8n instance and no Twilio credentials exist |
+
 ## Demo / simulated (by design, labelled in the UI)
 
 - The city feed: cells, drains, pipes, facilities, populations, history and the three scenarios are a seeded simulation (header: MODE SIMULATION).

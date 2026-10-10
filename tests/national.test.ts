@@ -76,3 +76,78 @@ describe("freshness", () => {
     expect(freshness(null, 10, now)).toBe("OFFLINE");
   });
 });
+
+import { parseNowcastRss, rainBand, districtIdFor } from "@/lib/national/nowcast";
+import { corroborate, districtAt } from "@/lib/national/corroborate";
+import type { NationalSnapshot } from "@/lib/national/store";
+
+describe("IMD district nowcast", () => {
+  // Recorded real response, 2026-10-10.
+  const items = parseNowcastRss(readFileSync("tests/fixtures/imd-nowcast.xml", "latin1"));
+  it("parses every item with offset timestamps", () => {
+    expect(items.length).toBe(100);
+    // The real feed contains the odd item whose expiry precedes its onset; those are simply never active.
+    expect(items.filter((n) => Date.parse(n.expiresAt!) > Date.parse(n.onsetAt!)).length).toBeGreaterThanOrEqual(95);
+  });
+  it("reads the rain band from IMD's own wording", () => {
+    expect(rainBand("Moderate rain: 5-15 mm/hr , Moderate Thunderstorms")).toBe("moderate");
+    expect(rainBand("Heavy rain: >15 mm/hr")).toBe("heavy");
+    expect(rainBand("Moderate Thunderstorms with maximum surface wind speed")).toBe("none");
+    expect(items.find((n) => n.districtName === "ERNAKULAM")!.rainBand).toBe("moderate");
+  });
+  it("places districts only when the name is unique across India", () => {
+    expect(districtIdFor("ERNAKULAM")).toBeTruthy();
+    expect(districtIdFor("Not A District")).toBeNull();
+    expect(items.filter((n) => n.districtId).length).toBeGreaterThan(50);
+  });
+});
+
+describe("two-input risk", () => {
+  const flood = { id: "a", headline: "", sender: "CWC", sentAt: "2026-10-10T12:00:00Z", event: "Flood", severity: "Moderate", urgency: "Future", certainty: "Observed" };
+  const rain = { rainBand: "heavy", thunderstorm: false, description: "Heavy rain", sentAt: "2026-10-10T12:00:00Z" };
+  it("never lowers risk when the nowcast input becomes known", () => {
+    const alone = districtRisk([flood]);
+    expect(districtRisk([flood], null).risk).toBe(alone.risk);
+    expect(districtRisk([flood], rain).risk).toBeGreaterThan(alone.risk);
+  });
+  it("raises coverage and confidence with the second input, and exposes each contribution", () => {
+    const r = districtRisk([flood], rain);
+    expect(r.coverage).toEqual({ have: 2, of: 4 });
+    expect(r.confidence).toBeCloseTo(0.65);
+    const [a, n] = r.factors;
+    expect(a.contribution + n.contribution).toBe(r.risk);
+    expect(r.factors.filter((f) => f.state === "unknown")).toHaveLength(2);
+  });
+  it("scores a rain nowcast on its own", () => {
+    expect(districtRisk([], rain).risk).toBe(48);
+  });
+});
+
+describe("citizen report corroboration", () => {
+  const muz = districtAt(85.39, 26.12)!; // Muzaffarpur, Bihar
+  const snap = (over: Partial<NationalSnapshot>): NationalSnapshot => ({ generatedAt: "", source: {} as never, sources: [], summary: {} as never, districts: {}, alerts: [], hotspots: [], ...over });
+  const alert = (event: string, domain: "flood" | "stress") => ({ id: "x", sender: "CWC", event, severity: "Moderate", urgency: "Future", certainty: "Observed", headline: "", sentAt: "", areaDesc: "", state: muz.state, districtIds: [muz.id], domain });
+  it("finds the district that contains a point", () => {
+    expect(muz.name).toBe("Muzaffarpur");
+    expect(districtAt(0, 0)).toBeNull();
+  });
+  it("corroborates a flood report where an official flood alert is active", () => {
+    const c = corroborate({ lng: 85.39, lat: 26.12, kind: "flood" }, snap({ alerts: [alert("Flood", "flood")] }));
+    expect(c.corroborationStatus).toBe("CORROBORATED");
+    expect(c.confidenceDelta).toBeGreaterThan(0);
+  });
+  it("partially corroborates on a rain nowcast alone", () => {
+    const c = corroborate({ lng: 85.39, lat: 26.12, kind: "flood" }, snap({ districts: { [muz.id]: { nowcast: { rainBand: "moderate", thunderstorm: false, description: "", sentAt: "" } } as never } }));
+    expect(c.corroborationStatus).toBe("PARTIALLY_CORROBORATED");
+  });
+  it("does not treat silence as contradiction", () => {
+    const c = corroborate({ lng: 85.39, lat: 26.12, kind: "flood" }, snap({}));
+    expect(c.corroborationStatus).toBe("NO_OFFICIAL_SIGNAL");
+    expect(c.confidenceDelta).toBe(0);
+  });
+  it("flags a conflict without rejecting the report", () => {
+    const c = corroborate({ lng: 85.39, lat: 26.12, kind: "flood" }, snap({ alerts: [alert("Heat Wave", "stress")] }));
+    expect(c.corroborationStatus).toBe("CONFLICTING");
+    expect(c.confidenceDelta).toBeLessThan(0);
+  });
+});

@@ -25,3 +25,8 @@ Research only: no application code was changed. Each row was tested with one or 
 **NDMA SACHET CAP feed.** One adapter gives official IMD and CWC alerts nationally, in a documented international standard, with explicit onset/expiry for freshness, and no credentials. Poll centrally every 10 minutes, store alerts with their identifiers (natural deduplication), never from the browser.
 
 Not started. Building the national layer is a major change to a frozen, judge-ready product and waits for approval.
+
+## Update 2026-10-11
+- **Implemented:** NDMA SACHET (source 1) and IMD district nowcast RSS (source 2). The nowcast feed gives a district name without a state, so only names unique across India are placed.
+- **Scheduler:** not created yet. The plan is EventBridge Scheduler → the existing Lambda → `POST /api/ingest/national` every 15 minutes (see `docs/AWS_SETUP.md`).
+- **Boundaries.** Survey of India publishes administrative boundary data through its Online Maps Portal (`onlinemaps.surveyofindia.gov.in`, reachable), but downloads sit behind a registered account and its own licence terms, which were not verified. In its place the map uses DataMeet's `Country/india-soi.geojson` ("Survey of India State Map", CC BY 4.0) for the national outline, simplified to 74 KB with mapshaper. District and state polygons remain geoBoundaries (ADM2 ODbL 1.0, ADM1 CC BY 2.5 IN). DataMeet also holds Census 2011 district boundaries in the same depiction (641 districts); switching to them would fix the northern gap but lose districts created since 2011, so it was not done.

@@ -3,7 +3,8 @@
 #   PREVIEW=1 AI_ENDPOINT_SECRET=... bash infra/ai-lambda/deploy.sh    create the change set, print it, stop
 #   CHANGE_SET=<name> bash infra/ai-lambda/deploy.sh                   execute exactly that previewed change set
 #   AI_ENDPOINT_SECRET=... bash infra/ai-lambda/deploy.sh              create, print and execute in one go
-# Optional: BEDROCK_MODEL_ID, RESERVED_CONCURRENCY (-1 = none), STACK_NAME, AWS_REGION.
+# Optional: BEDROCK_MODEL_ID, RESERVED_CONCURRENCY (-1 = none), STACK_NAME, AWS_REGION,
+#           INGEST_URL + INGEST_SECRET (+ INGEST_RATE_MINUTES) to create the EventBridge schedule for national ingestion.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 STACK_NAME="${STACK_NAME:-aquapulse-ai}"
@@ -25,6 +26,9 @@ if [ -z "${CHANGE_SET:-}" ]; then
       "ParameterKey=EndpointSecret,ParameterValue=$AI_ENDPOINT_SECRET" \
       "ParameterKey=BedrockModelId,ParameterValue=${BEDROCK_MODEL_ID:-}" \
       "ParameterKey=ReservedConcurrency,ParameterValue=${RESERVED_CONCURRENCY:-2}" \
+      "ParameterKey=IngestUrl,ParameterValue=${INGEST_URL:-}" \
+      "ParameterKey=IngestSecret,ParameterValue=${INGEST_SECRET:-}" \
+      "ParameterKey=IngestRateMinutes,ParameterValue=${INGEST_RATE_MINUTES:-15}" \
     --query Id --output text >/dev/null
   if ! aws cloudformation wait change-set-create-complete --stack-name "$STACK_NAME" --change-set-name "$CHANGE_SET" 2>/dev/null; then
     reason="$(aws cloudformation describe-change-set --stack-name "$STACK_NAME" --change-set-name "$CHANGE_SET" --query StatusReason --output text)"
