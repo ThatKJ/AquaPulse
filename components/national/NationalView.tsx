@@ -31,6 +31,22 @@ const ago = (iso: string | null | undefined, now: number) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`;
 };
 
+/**
+ * Centre and zoom that fit a lng/lat box into the free part of the map. Done by hand because MapLibre's
+ * fitBounds mis-frames when a tilt and asymmetric padding are combined (it zoomed out to the whole country
+ * at laptop widths).
+ */
+function frame(m: MlMap, w: number, s: number, e: number, n: number, pad: { top: number; bottom: number; left: number; right: number }, maxZoom = 22) {
+  const c = m.getContainer();
+  const availW = Math.max(120, c.clientWidth - pad.left - pad.right);
+  const availH = Math.max(120, c.clientHeight - pad.top - pad.bottom);
+  const y = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const zx = Math.log2((availW * 360) / (Math.max(0.01, e - w) * 512));
+  const zy = Math.log2((availH * 2 * Math.PI) / (Math.max(0.0001, y(n) - y(s)) * 512));
+  const midLat = (Math.atan(Math.exp((y(n) + y(s)) / 2)) * 360) / Math.PI - 90;
+  return { center: [(w + e) / 2, midLat] as [number, number], zoom: Math.min(zx, zy, maxZoom) - 0.1, padding: pad };
+}
+
 type Load = { status: "loading" } | { status: "error"; detail: string } | { status: "ok"; data: NationalSnapshot };
 
 export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
@@ -127,7 +143,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     m.on("load", () => {
       // Fit again once the container has its final size: the first fit can run before layout settles.
       m.resize();
-      m.fitBounds(INDIA, { padding: FIT, duration: 0 });
+      m.jumpTo({ ...frame(m, INDIA.getWest(), INDIA.getSouth(), INDIA.getEast(), INDIA.getNorth(), FIT), pitch: 0, bearing: 0 });
       setReady(true);
     });
     let hovered: string | null = null;
@@ -171,7 +187,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     const colour: ExpressionSpecification | string = pairs.length ? (["match", ["get", "id"], ...pairs, "#121920"] as unknown as ExpressionSpecification) : "#121920";
     m.setPaintProperty("district-fill", "fill-color", colour);
     const ids = pairs.filter((_, i) => i % 2 === 0);
-    const heights = Object.entries(data?.districts ?? {}).filter(([, r]) => r.risk > 0).flatMap(([id, r]) => [id, 4000 + r.risk * 420]);
+    const heights = Object.entries(data?.districts ?? {}).filter(([, r]) => r.risk > 0).flatMap(([id, r]) => [id, 2500 + r.risk * 260]);
     m.setFilter("district-lift", ["in", ["get", "id"], ["literal", ids]]);
     if (ids.length) {
       m.setPaintProperty("district-lift", "fill-extrusion-color", ["match", ["get", "id"], ...pairs, "#121920"] as unknown as ExpressionSpecification);
@@ -181,6 +197,23 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
   }, [data, ready]);
 
   const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Re-frame the current level when the window changes size; MapLibre keeps the old camera otherwise.
+  const [viewport, setViewport] = useState(0);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const onResize = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        map.current?.resize();
+        setViewport((v) => v + 1);
+      }, 200);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
   const prev = useRef<string | null>(null);
   useEffect(() => {
     const m = map.current;
@@ -193,8 +226,8 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         // Frame the state from its districts' positions, with a margin since these are centre points.
         const b = members.reduce((acc, d) => acc.extend([d.lng, d.lat]), new LngLatBounds([members[0].lng, members[0].lat], [members[0].lng, members[0].lat]));
         const pad = 0.7;
-        m.fitBounds([[b.getWest() - pad, b.getSouth() - pad], [b.getEast() + pad, b.getNorth() + pad]], { padding: { ...FIT, right: 384 }, duration: reduced ? 0 : 900, maxZoom: 7.5, pitch: 24, bearing: 0 });
-      } else m.fitBounds(INDIA, { padding: FIT, duration: reduced ? 0 : 800, pitch: 0, bearing: 0 });
+        m.easeTo({ ...frame(m, b.getWest() - pad, b.getSouth() - pad, b.getEast() + pad, b.getNorth() + pad, { ...FIT, right: 384 }, 7.5), pitch: 24, bearing: 0, duration: reduced ? 0 : 900 });
+      } else m.easeTo({ ...frame(m, INDIA.getWest(), INDIA.getSouth(), INDIA.getEast(), INDIA.getNorth(), FIT), pitch: 0, bearing: 0, duration: reduced ? 0 : 800 });
       m.setFilter("state-dim", stateSel ? ["!=", ["get", "state"], stateSel] : ["==", ["get", "state"], "__none__"]);
       return;
     }
@@ -202,7 +235,7 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
     const d = BY_ID.get(selected);
     m.setFilter("state-dim", d ? ["!=", ["get", "state"], d.state] : ["==", ["get", "state"], "__none__"]);
     if (d) m.easeTo({ center: [d.lng, d.lat], zoom: Math.max(m.getZoom(), 7.4), pitch: 38, bearing: 0, duration: reduced ? 0 : 800, padding: { top: 60, bottom: 50, left: 260, right: 380 } });
-  }, [selected, stateSel, ready, reduced]);
+  }, [selected, stateSel, ready, reduced, viewport]);
 
   const sel = selected ? BY_ID.get(selected) : null;
   const selRisk = selected ? data?.districts[selected] : undefined;
