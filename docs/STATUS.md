@@ -23,6 +23,18 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias
 | Engine | PASS | 25 tests; deterministic |
 | Real-speed flood run (local production build) | PASS | 56 s, average 119 fps, 3 frames over 50 ms (worst 59 ms) |
 
+## National layer (2026-10-11, branch `national` → main)
+
+| Area | State | Evidence |
+| --- | --- | --- |
+| NDMA SACHET ingestion | PASS | Two real syncs: 99 alerts stored (60 + 39), keyed by CAP identifier; 98 with a state, 53 with a district; `sync_runs` records each run |
+| District placement | PARTIAL | Name matching only (the feed's polygon service returns 403). 20 of 25 active alerts placed on 2026-10-10 |
+| Composite water risk | PARTIAL | One of four planned inputs (official alerts). Rainfall, river and heat are UNKNOWN and shown as such |
+| India map as default route | PASS (local build) | 735 districts (498 KB GeoJSON, 122 KB gzipped), real alert districts coloured, hover, select, search, breadcrumb, entry to the Bengaluru HydroTwin; zero console errors at both sizes |
+| Demo routes after the change | PASS (local build) | `/?demo=1`: flood 14/14 with 3,822 → 190 and PROTECTED, scarcity 6/6, false report UNVERIFIED · 14/100 |
+| Scheduler | PARTIAL | No cron: the server refreshes after a read when the last sync is older than 10 minutes. With no visitors nothing syncs. A forced sync route exists behind the server secret |
+| IMD JSON APIs, MOSDAC, CWC station feed | BLOCKED / deferred | See `docs/NATIONAL_DATA_SOURCES.md` |
+
 ## Demo / simulated (by design, labelled in the UI)
 
 - The city feed: cells, drains, pipes, facilities, populations, history and the three scenarios are a seeded simulation (header: MODE SIMULATION).

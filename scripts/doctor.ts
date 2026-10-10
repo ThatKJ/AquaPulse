@@ -68,6 +68,17 @@ run(async () => {
       checks.push(["Public site", f], ["AWS Lambda", f]);
     }
   }
+  // National layer: freshness of the last successful NDMA SACHET sync, read from the database.
+  try {
+    const { nationalSnapshot } = await import("../lib/national/store");
+    const snap = await nationalSnapshot();
+    checks.push(["NDMA SACHET", !snap
+      ? { state: "NOT_CONFIGURED", detail: "needs Supabase" }
+      : { state: snap.source.freshness === "CURRENT" ? "PASS" : "UNVERIFIED", detail: `${snap.source.freshness} · last sync ${snap.source.lastSuccessAt ?? "never"} · ${snap.summary.activeAlerts} active alerts${snap.source.freshness === "CURRENT" ? "" : " (run `npm run sync:national`)"}` }]);
+  } catch (err) {
+    checks.push(["NDMA SACHET", { state: "FAIL", detail: err instanceof Error ? err.message.slice(0, 120) : "error" }]);
+  }
+  checks.push(["IMD APIs", { state: "NOT_CONFIGURED", detail: "blocked: IMD requires IP whitelisting (docs/NATIONAL_DATA_SOURCES.md)" }]);
   checks.push(["n8n", process.env.N8N_BASE_URL
     ? { state: "UNVERIFIED", detail: `${process.env.N8N_BASE_URL} configured; import n8n/*.json and run a test webhook` }
     : { state: "NOT_CONFIGURED", detail: "no n8n instance; workflows are importable JSON in n8n/ (see docs/N8N.md)" }]);

@@ -219,7 +219,14 @@ export function Header({
       <div className="flex shrink-0 items-center gap-2">
         <Droplets size={16} aria-hidden className="text-flood-low" />
         <h1 className="text-[15px] font-semibold tracking-tight text-ink">AquaPulse</h1>
-        <p className="hidden whitespace-nowrap text-[13px] text-muted lg:block">Bengaluru Water Intelligence</p>
+        <p className="hidden items-center gap-1.5 whitespace-nowrap text-[13px] text-muted lg:flex">
+          {/* The local HydroTwin sits under the national view: India › Karnataka › Bengaluru. */}
+          <button type="button" className="hover:text-ink" onClick={() => window.location.assign("/")}>
+            India
+          </button>
+          <span className="text-faint">›</span>
+          <span>Bengaluru HydroTwin</span>
+        </p>
       </div>
       <p className="hidden whitespace-nowrap border-l border-hairline pl-3 text-[13px] text-faint min-[1700px]:block">
         AI Decision Engine for a Safer, Water-Resilient Bengaluru

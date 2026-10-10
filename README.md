@@ -1,8 +1,11 @@
 # AquaPulse
 
-AI decision engine for a safer, water-resilient Bengaluru: flood and scarcity in one command center.
+AquaPulse is a water-risk intelligence system for India that combines official alerts, citizen evidence and a local decision model.
 
-**Live:** https://aquapulse-liard.vercel.app/?demo=1 · scenarios: `&scenario=flood`, `scarcity`, `false-report` · shortcuts: Space play/pause, → next, R reset.
+- **National:** current official alerts (NDMA SACHET: IMD, CWC, state authorities) on a district map of India, with an explainable derived risk score.
+- **Local:** a HydroTwin of south-east Bengaluru that predicts flood and scarcity, ranks interventions and learns which infrastructure to fix first. Its city data is a labelled simulation.
+
+**Live:** https://aquapulse-liard.vercel.app (India, current conditions) · local demo `/?demo=1` · scenarios: `&scenario=flood`, `scarcity`, `false-report` · shortcuts: Space play/pause, → next, R reset.
 
 It answers what is happening, what happens next, why, who gets hurt, what to do, what that changes, whether it worked, and what the city should permanently fix.
 
@@ -23,4 +26,4 @@ npm run check                     # typecheck, lint, tests, build
 Copy `.env.example` to `.env.local` for integrations; the demo needs none.
 
 ## Docs
-[Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO.md) · [AWS setup](docs/AWS_SETUP.md) · [Database](docs/DATABASE.md) · [n8n and Twilio](docs/N8N.md) · [Security](docs/SECURITY.md) · [Decisions](docs/DECISIONS.md) · [Toolchain](docs/TOOLCHAIN.md)
+[Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO.md) · [AWS setup](docs/AWS_SETUP.md) · [Database](docs/DATABASE.md) · [n8n and Twilio](docs/N8N.md) · [Security](docs/SECURITY.md) · [Data provenance](docs/DATA_PROVENANCE.md) · [National sources](docs/NATIONAL_DATA_SOURCES.md) · [Decisions](docs/DECISIONS.md) · [Toolchain](docs/TOOLCHAIN.md)
