@@ -177,6 +177,14 @@ export async function fetchTwilioMedia(rawUrl: string): Promise<{ bytes: Uint8Ar
 
 export const sha256Hex = (data: string | Uint8Array) => createHash("sha256").update(data).digest("hex");
 
+/** Keyed hash of a phone number, and the reporter id derived from it. The raw number is never stored. */
+export function reporterKey(from: string): { phoneHash?: string; reporterId?: string } {
+  const phone = from.replace(/^whatsapp:/i, "").replace(/[^\d+]/g, "");
+  if (!phone) return {};
+  const phoneHash = createHmac("sha256", serverEnv().WEBHOOK_SECRET ?? "aquapulse").update(phone).digest("hex");
+  return { phoneHash, reporterId: `r_${phoneHash.slice(0, 16)}` };
+}
+
 export type IngestResult = {
   evidenceId: string;
   duplicate: boolean;
@@ -194,11 +202,11 @@ export async function ingestReport(r: {
   messageId: string; from: string; text: string; lat?: number; lng?: number; mediaUrl?: string; timestamp?: string;
 }): Promise<IngestResult> {
   const isWhatsApp = r.from.toLowerCase().startsWith("whatsapp:");
-  const phone = r.from.replace(/^whatsapp:/i, "").replace(/[^\d+]/g, "");
+  const { phoneHash } = reporterKey(r.from);
   const { row, duplicate } = await repo().insertEvidence({
     messageId: r.messageId,
     channel: isWhatsApp ? "whatsapp" : "sms",
-    phoneHash: phone ? createHmac("sha256", serverEnv().WEBHOOK_SECRET ?? "aquapulse").update(phone).digest("hex") : undefined,
+    phoneHash,
     body: r.text,
     lat: r.lat,
     lng: r.lng,

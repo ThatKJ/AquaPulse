@@ -13,6 +13,8 @@ type Notice = { report: LiveReport; evidenceId: string; placed: boolean; officia
 const OFFICIAL_LABEL: Record<Official["corroborationStatus"], string> = { CORROBORATED: "Corroborated by official data", PARTIALLY_CORROBORATED: "Partly corroborated by official data", NO_OFFICIAL_SIGNAL: "No official signal", CONFLICTING: "Conflicts with official data" };
 
 const POLL_MS = 5000;
+// A report can gain a location (a pin sent after the photo) or an analysis after it is first seen, so each state is tracked.
+const key = (r: LiveReport) => `${r.id}:${r.lat != null ? "placed" : "unplaced"}:${r.analysis ? "analysed" : "raw"}`;
 const OBSERVER: Record<EvidenceAnalysis["source"], string> = { rekognition: "AWS Rekognition · live AWS", bedrock: "Amazon Bedrock · live AWS", fixture: "Recorded analysis" };
 
 /**
@@ -38,12 +40,12 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
         const { reports } = (await res.json()) as { reports: LiveReport[] };
         if (stop) return;
         if (!seen.current) {
-          seen.current = new Set(reports.map((r) => r.id));
+          seen.current = new Set(reports.map((r) => key(r)));
           return;
         }
-        const fresh = reports.filter((r) => !seen.current!.has(r.id)).reverse();
+        const fresh = reports.filter((r) => !seen.current!.has(key(r))).reverse();
         for (const r of fresh) {
-          seen.current.add(r.id);
+          seen.current.add(key(r));
           const evidenceId = `L-${r.id.slice(0, 6)}`;
           const placed = r.lat != null && r.lng != null;
           if (placed)
@@ -54,7 +56,7 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
                 reporterTrust: 0.5, text: r.text, location: { lng: r.lng!, lat: r.lat! }, analysis: r.analysis, provenance: "LIVE",
               },
             });
-          setNotices((n) => [...n.slice(-2), { report: r, evidenceId, placed }]);
+          setNotices((n) => [...n.filter((x) => x.report.id !== r.id).slice(-2), { report: r, evidenceId, placed }]);
           // Deterministic comparison with official conditions for the same district. Advisory: it does not change the score.
           if (placed) {
             const kind = r.analysis && /dry|leak|burst/.test(r.analysis.incidentType) ? "scarcity" : "flood";

@@ -1,14 +1,16 @@
 {
-  "name": "AquaPulse 1 - Citizen report ingestion",
+  "name": "AquaPulse — Citizen Report Ingestion",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "aquapulse/citizen-report",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": false
+        }
       },
-      "id": "9fabd956-5fa4-5d80-9f63-82e58ac76008",
+      "id": "24c6f8e8-3b88-5ca4-8126-c8b3bb10426f",
       "name": "Twilio inbound",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -16,14 +18,14 @@
         0,
         0
       ],
-      "webhookId": "474245c2-9bab-59ee-b22b-7628d98677d1"
+      "webhookId": "6ea5e4bf-04e3-5825-a49d-0e2d42dff4c4"
     },
     {
       "parameters": {
-        "jsCode": "// Twilio form fields -> AquaPulse report contract. No scoring here: AquaPulse computes, n8n orchestrates.\nconst b = $input.first().json.body ?? {};\nif (!b.MessageSid || !b.From) return [{ json: { valid: false, reason: 'MessageSid and From are required' } }];\nconst num = (v) => (v === undefined || v === '' || isNaN(Number(v)) ? undefined : Number(v));\nreturn [{ json: { valid: true, report: {\n  messageId: b.MessageSid,            // idempotency key: a Twilio retry is a duplicate, not a second report\n  from: b.From,\n  text: b.Body ?? '',\n  lat: num(b.Latitude), lng: num(b.Longitude),   // only present when the citizen shares a location pin\n  mediaUrl: b.MediaUrl0 || undefined,\n  mediaContentType: b.MediaContentType0 || undefined,\n  timestamp: new Date().toISOString(),\n} } }];"
+        "jsCode": "// Orchestration only. No scoring, no fusion and no signature maths here: AquaPulse verifies Twilio's signature itself.\n// This node just prepares the forward: the original form fields, the signature header, and the URL Twilio signed.\nconst item = $input.first().json;\nconst fields = item.body ?? {};\nconst headers = item.headers ?? {};\nif (!fields.MessageSid || !fields.From) return [{ json: { valid: false, reason: 'MessageSid and From are required' } }];\nreturn [{ json: {\n  valid: true,\n  form: new URLSearchParams(Object.entries(fields).map(([k, v]) => [k, String(v)])).toString(),\n  signature: headers['x-twilio-signature'] ?? '',\n  signedUrl: item.webhookUrl,   // the public URL of this webhook: what Twilio signed\n} }];"
       },
-      "id": "89f79526-a798-5a61-b5da-f3581f3c84d1",
-      "name": "Normalize",
+      "id": "c8b40956-89b6-5ffa-a8ec-d8464f5da8d5",
+      "name": "Prepare forward",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -41,7 +43,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "65db440e-ef31-55bd-a87f-973ef6d75318",
+              "id": "cc0967cb-c9b2-547e-930a-e231ac534f6b",
               "leftValue": "={{ $json.valid }}",
               "rightValue": "",
               "operator": {
@@ -54,7 +56,7 @@
         },
         "options": {}
       },
-      "id": "8e094131-4974-50ea-bee1-42f56d23f926",
+      "id": "a3fd8701-d485-5570-819b-25c1ee37cf17",
       "name": "Valid?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -66,31 +68,45 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.AQUAPULSE_URL }}/api/webhooks/report",
+        "url": "={{ $vars.AQUAPULSE_URL }}/api/webhooks/twilio",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-aquapulse-secret",
-              "value": "={{ $env.AQUAPULSE_WEBHOOK_SECRET }}"
+              "value": "={{ $vars.AQUAPULSE_WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "x-twilio-signature",
+              "value": "={{ $json.signature }}"
+            },
+            {
+              "name": "x-twilio-original-url",
+              "value": "={{ $json.signedUrl }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/x-www-form-urlencoded"
             }
           ]
         },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.report) }}",
+        "contentType": "raw",
+        "rawContentType": "application/x-www-form-urlencoded",
+        "body": "={{ $json.form }}",
         "options": {
-          "timeout": 30000,
+          "timeout": 45000,
           "response": {
             "response": {
               "neverError": true,
-              "fullResponse": true
+              "fullResponse": true,
+              "responseFormat": "text"
             }
           }
         }
       },
-      "id": "36df52bc-ccc7-5515-9cfa-1deb8a0995c9",
-      "name": "AquaPulse report",
+      "id": "d958465b-93e3-5407-a52f-d4258678da9c",
+      "name": "AquaPulse: verify, analyse, store",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -98,7 +114,7 @@
         -100
       ],
       "retryOnFail": true,
-      "maxTries": 3,
+      "maxTries": 2,
       "waitBetweenTries": 2000
     },
     {
@@ -111,7 +127,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "f34993fe-a463-5448-a20e-ac43d3a9773a",
+              "id": "857162c7-6ef9-54d9-8966-230152c79a71",
               "leftValue": "={{ $json.statusCode }}",
               "rightValue": 400,
               "operator": {
@@ -123,7 +139,7 @@
         },
         "options": {}
       },
-      "id": "8e6febfa-fff6-5298-bb7f-ecf306b68a3e",
+      "id": "5a12e653-1241-5d83-904a-2cdc56c69718",
       "name": "Accepted?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -134,14 +150,22 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, evidenceId: $json.body.evidenceId, duplicate: $json.body.duplicate }) }}",
+        "respondWith": "text",
+        "responseBody": "={{ $json.data ?? $json.body }}",
         "options": {
-          "responseCode": 200
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "text/xml; charset=utf-8"
+              }
+            ]
+          }
         }
       },
-      "id": "e5cda8ca-d428-5073-b7ab-1a636a488903",
-      "name": "Ack",
+      "id": "9f3adcb9-91e1-5ba3-aaad-6451b0b4232f",
+      "name": "Reply to WhatsApp (TwiML from AquaPulse)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -151,14 +175,22 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, status: $json.statusCode, error: $json.body.error }) }}",
+        "respondWith": "text",
+        "responseBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
         "options": {
-          "responseCode": 502
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "text/xml; charset=utf-8"
+              }
+            ]
+          }
         }
       },
-      "id": "26b67819-756f-50ca-bd3f-9b93c9475bd1",
-      "name": "Upstream error",
+      "id": "bd743b05-5fbd-5bab-92a0-2039c0603db2",
+      "name": "Upstream rejected: silent reply",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -168,14 +200,14 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, reason: $json.reason }) }}",
+        "respondWith": "text",
+        "responseBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
         "options": {
           "responseCode": 400
         }
       },
-      "id": "b9cfb1b7-7d7c-55c0-b259-8d6aedbcb5d7",
-      "name": "Rejected",
+      "id": "ee6527c5-89fc-5385-9a1f-5cb1ba06a93e",
+      "name": "Malformed: reject",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -189,14 +221,14 @@
       "main": [
         [
           {
-            "node": "Normalize",
+            "node": "Prepare forward",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize": {
+    "Prepare forward": {
       "main": [
         [
           {
@@ -211,21 +243,21 @@
       "main": [
         [
           {
-            "node": "AquaPulse report",
+            "node": "AquaPulse: verify, analyse, store",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Rejected",
+            "node": "Malformed: reject",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "AquaPulse report": {
+    "AquaPulse: verify, analyse, store": {
       "main": [
         [
           {
@@ -240,14 +272,14 @@
       "main": [
         [
           {
-            "node": "Ack",
+            "node": "Reply to WhatsApp (TwiML from AquaPulse)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Upstream error",
+            "node": "Upstream rejected: silent reply",
             "type": "main",
             "index": 0
           }

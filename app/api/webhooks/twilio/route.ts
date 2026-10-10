@@ -2,7 +2,8 @@ import { z } from "zod";
 import { validTwilioSignature } from "@/lib/alerts";
 import { safeEqual } from "@/lib/aws/clients";
 import { serverEnv } from "@/lib/schemas/env";
-import { handle, HttpError, ingestReport, readText } from "../../_lib";
+import { repo } from "@/lib/db";
+import { handle, HttpError, ingestReport, readText, reporterKey } from "../../_lib";
 
 const num = (min: number, max: number) =>
   z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().min(min).max(max).optional());
@@ -28,29 +29,56 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
   const env = serverEnv();
   const params = Object.fromEntries(new URLSearchParams(await readText(req, 64 * 1024))) as Record<string, string>;
 
+  const secretOk = Boolean(env.WEBHOOK_SECRET && req.headers.get("x-aquapulse-secret") && safeEqual(req.headers.get("x-aquapulse-secret")!, env.WEBHOOK_SECRET));
   if (env.TWILIO_AUTH_TOKEN) {
+    // One authoritative check, here. Twilio signs the URL it called: normally this route's public URL; when an
+    // orchestrator (n8n) received the message and forwarded it, that orchestrator's URL, which it passes in
+    // x-twilio-original-url. The override is honoured only from a caller holding the server secret, and the
+    // Twilio signature must still verify, so a forwarder cannot invent messages.
+    const forwardedUrl = secretOk ? req.headers.get("x-twilio-original-url") : null;
     const signature = req.headers.get("x-twilio-signature");
-    if (!signature || !validTwilioSignature(env.TWILIO_AUTH_TOKEN, publicUrl(req), params, signature))
+    if (!signature || !validTwilioSignature(env.TWILIO_AUTH_TOKEN, forwardedUrl || publicUrl(req), params, signature))
       throw new HttpError(403, "INVALID_SIGNATURE", "Missing or invalid X-Twilio-Signature.");
   } else {
     // No Twilio token: only a caller holding WEBHOOK_SECRET may use this endpoint. It is never open.
     if (!env.WEBHOOK_SECRET) throw new HttpError(503, "NOT_CONFIGURED", "Neither TWILIO_AUTH_TOKEN nor WEBHOOK_SECRET is set; this webhook is disabled.");
-    const given = req.headers.get("x-aquapulse-secret");
-    if (!given || !safeEqual(given, env.WEBHOOK_SECRET)) throw new HttpError(403, "FORBIDDEN", "Missing or incorrect x-aquapulse-secret header.");
+    if (!secretOk) throw new HttpError(403, "FORBIDDEN", "Missing or incorrect x-aquapulse-secret header.");
   }
 
   const parsed = TwilioInboundSchema.safeParse(params);
   if (!parsed.success) throw new HttpError(400, "INVALID_REQUEST", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
   const m = parsed.data;
-  const result = await ingestReport({
-    messageId: m.MessageSid, from: m.From, text: m.Body, lat: m.Latitude, lng: m.Longitude,
-    mediaUrl: m.MediaUrl0, timestamp: new Date().toISOString(),
-  });
+  const { reporterId } = reporterKey(m.From);
+  const since = new Date(Date.now() - PAIR_WINDOW_MIN * 60_000).toISOString();
+  const hasContent = Boolean(m.Body.trim() || m.MediaUrl0);
+  let lat = m.Latitude;
+  let lng = m.Longitude;
 
+  // WhatsApp delivers a photo and a location pin as two messages. Pair them per reporter within a short window.
+  // A pin that only completes an earlier report is not stored as a report of its own.
+  if (lat != null && lng != null && !hasContent && reporterId) {
+    const filled = await repo().fillReporterLocation(reporterId, lat, lng, since);
+    if (filled > 0) return twiml(requestId, "AquaPulse added your location to your report. Evidence is being checked.");
+  }
+  if ((lat == null || lng == null) && reporterId) {
+    const recent = await repo().reporterRecentLocation(reporterId, since);
+    if (recent) ({ lat, lng } = recent);
+  }
+
+  const result = await ingestReport({ messageId: m.MessageSid, from: m.From, text: m.Body, lat, lng, mediaUrl: m.MediaUrl0, timestamp: new Date().toISOString() });
   if (result.analysisError) console.error(JSON.stringify({ requestId, route: "webhooks/twilio", analysisError: result.analysisError }));
 
-  // Empty TwiML: acknowledge without replying to the citizen.
-  return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+  // The reply never claims an emergency: one report is evidence to check, not a confirmed incident.
+  const ref = `AQ-${result.evidenceId.replace(/-/g, "").slice(0, 5).toUpperCase()}`;
+  if (result.duplicate) return twiml(requestId, `AquaPulse already has this report. Reference: ${ref}`);
+  if (lat == null || lng == null) return twiml(requestId, `AquaPulse received your report. Please share your location (attach → Location) so it can be placed on the map. Reference: ${ref}`);
+  return twiml(requestId, `AquaPulse received your report. Evidence is being checked. Reference: ${ref}`);
+});
+
+const PAIR_WINDOW_MIN = 15;
+const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function twiml(requestId: string, message: string): Response {
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${xml(message)}</Message></Response>`, {
     headers: { "content-type": "text/xml; charset=utf-8", "x-request-id": requestId },
   });
-});
+}

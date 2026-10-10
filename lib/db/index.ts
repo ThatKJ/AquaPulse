@@ -47,6 +47,10 @@ export type Repo = {
   /** Mirror engine state. Idempotent: rows are upserted by their engine ids. Returns row counts written. */
   syncState(s: StateSync): Promise<{ incidents: number; evidence: number; interventions: number }>;
   listRecentEvidence(limit?: number): Promise<EvidenceRow[]>;
+  /** Give a location to this reporter's recent reports that have none (a pin sent after a photo). Returns how many were updated. */
+  fillReporterLocation(reporterId: string, lat: number, lng: number, sinceIso: string): Promise<number>;
+  /** This reporter's most recent located report since `sinceIso` (a pin sent before a photo). */
+  reporterRecentLocation(reporterId: string, sinceIso: string): Promise<{ lat: number; lng: number } | null>;
   /** Newest first. Excludes rows mirrored from the engine. */
   listLiveReports(limit?: number): Promise<LiveReport[]>;
   health(): Promise<HealthResponse["db"]>;
@@ -179,6 +183,17 @@ function supabaseRepo(db: SupabaseClient): Repo {
       }
       return { incidents: s.incidents.length, evidence: s.evidence.length, interventions: s.interventions.length };
     },
+    async fillReporterLocation(reporterId, lat, lng, sinceIso) {
+      const { data, error } = await db.from("evidence_events").update({ location: ewkt(lng, lat) }).eq("reporter_id", reporterId).is("location", null).gt("received_at", sinceIso).select("id");
+      if (error) throw new DbError("fill location", error);
+      return (data ?? []).length;
+    },
+    async reporterRecentLocation(reporterId, sinceIso) {
+      const { data, error } = await db.rpc("reporter_recent_location", { reporter: reporterId, since: sinceIso });
+      if (error) throw new DbError("recent location", error);
+      const row = ((data ?? []) as { lng: number; lat: number }[])[0];
+      return row ? { lat: row.lat, lng: row.lng } : null;
+    },
     async listLiveReports(limit = 20) {
       const { data, error } = await db.rpc("recent_live_reports", { max_rows: limit });
       if (error) throw new DbError("list live reports", error);
@@ -247,6 +262,22 @@ function memoryRepo(): Repo {
       for (const e of s.evidence) mirror.set(`evidence:${e.id}`, e);
       for (const r of s.interventions) mirror.set(`intervention:${r.id}`, r);
       return { incidents: s.incidents.length, evidence: s.evidence.length, interventions: s.interventions.length };
+    },
+    async fillReporterLocation(reporterId, lat, lng, sinceIso) {
+      let n = 0;
+      for (const r of evidence.values()) {
+        const w = where.get(r.id) ?? {};
+        if (r.reporterId === reporterId && w.lat == null && r.receivedAt > sinceIso) {
+          where.set(r.id, { lat, lng });
+          n++;
+        }
+      }
+      return n;
+    },
+    async reporterRecentLocation(reporterId, sinceIso) {
+      const hit = [...evidence.values()].filter((r) => r.reporterId === reporterId && r.receivedAt > sinceIso && where.get(r.id)?.lat != null).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
+      const w = hit ? where.get(hit.id) : undefined;
+      return w?.lat != null && w.lng != null ? { lat: w.lat, lng: w.lng } : null;
     },
     async listLiveReports(limit = 20) {
       return [...evidence.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, limit)
