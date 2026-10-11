@@ -94,7 +94,8 @@ async function acknowledge(requestId: string, ourNumber: string | undefined, sen
       const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.TWILIO_ACCOUNT_SID)}/Messages.json`, {
         method: "POST",
         headers: { authorization: "Basic " + Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString("base64"), "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ From: ourNumber, To: sender, Body: message }),
+        // Trial accounts refuse Body (error 21654) and accept only a Twilio-provided template; its wording is Twilio's, not ours.
+        body: new URLSearchParams({ From: ourNumber, To: sender, ...(env.TWILIO_ACK_CONTENT_SID ? { ContentSid: env.TWILIO_ACK_CONTENT_SID } : { Body: message }) }),
         signal: AbortSignal.timeout(5000),
       });
       status = res.status;
