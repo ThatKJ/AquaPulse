@@ -2,218 +2,113 @@
   "name": "AquaPulse — Citizen Report Ingestion",
   "nodes": [
     {
+      "id": "102ca6f5-06e3-452a-b43a-fd282a4f0f19",
+      "name": "Twilio inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        96
+      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "aquapulse/citizen-report",
         "responseMode": "responseNode",
-        "options": {
-          "rawBody": false
-        }
-      },
-      "id": "24c6f8e8-3b88-5ca4-8126-c8b3bb10426f",
-      "name": "Twilio inbound",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        0,
-        0
-      ],
-      "webhookId": "6ea5e4bf-04e3-5825-a49d-0e2d42dff4c4"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Orchestration only. No scoring, no fusion and no signature maths here: AquaPulse verifies Twilio's signature itself.\n// This node just prepares the forward: the original form fields, the signature header, and the URL Twilio signed.\nconst item = $input.first().json;\nconst fields = item.body ?? {};\nconst headers = item.headers ?? {};\nif (!fields.MessageSid || !fields.From) return [{ json: { valid: false, reason: 'MessageSid and From are required' } }];\nreturn [{ json: {\n  valid: true,\n  form: new URLSearchParams(Object.entries(fields).map(([k, v]) => [k, String(v)])).toString(),\n  signature: headers['x-twilio-signature'] ?? '',\n  signedUrl: item.webhookUrl,   // the public URL of this webhook: what Twilio signed\n} }];"
-      },
-      "id": "c8b40956-89b6-5ffa-a8ec-d8464f5da8d5",
-      "name": "Prepare forward",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        220,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "loose"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "cc0967cb-c9b2-547e-930a-e231ac534f6b",
-              "leftValue": "={{ $json.valid }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ]
-        },
         "options": {}
       },
-      "id": "a3fd8701-d485-5570-819b-25c1ee37cf17",
-      "name": "Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        440,
-        0
-      ]
+      "webhookId": "b8daa760-a3b7-449a-b8d4-bbf1c47dbb0c"
     },
     {
+      "id": "08ac35c0-31e9-451b-bfe7-e0a193f3c8c0",
+      "name": "AquaPulse: verify, analyse, store",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        96
+      ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.AQUAPULSE_URL }}/api/webhooks/twilio",
+        "url": "https://aquapulse-liard.vercel.app/api/webhooks/twilio",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-aquapulse-secret",
-              "value": "={{ $vars.AQUAPULSE_WEBHOOK_SECRET }}"
-            },
-            {
               "name": "x-twilio-signature",
-              "value": "={{ $json.signature }}"
+              "value": "={{ $json.headers[\"x-twilio-signature\"] ?? \"\" }}"
             },
             {
               "name": "x-twilio-original-url",
-              "value": "={{ $json.signedUrl }}"
-            },
-            {
-              "name": "content-type",
-              "value": "application/x-www-form-urlencoded"
+              "value": "={{ $json.webhookUrl }}"
             }
           ]
         },
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/x-www-form-urlencoded",
-        "body": "={{ $json.form }}",
+        "body": "={{ Object.entries($json.body ?? {}).map(([k, v]) => encodeURIComponent(k) + \"=\" + encodeURIComponent(String(v))).join(\"&\") }}",
         "options": {
           "timeout": 45000,
           "response": {
             "response": {
-              "neverError": true,
               "fullResponse": true,
-              "responseFormat": "text"
+              "neverError": true
             }
           }
         }
       },
-      "id": "d958465b-93e3-5407-a52f-d4258678da9c",
-      "name": "AquaPulse: verify, analyse, store",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        660,
-        -100
-      ],
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 2000
+      "onError": "continueErrorOutput"
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "loose"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "857162c7-6ef9-54d9-8966-230152c79a71",
-              "leftValue": "={{ $json.statusCode }}",
-              "rightValue": 400,
-              "operator": {
-                "type": "number",
-                "operation": "lt"
-              }
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "5a12e653-1241-5d83-904a-2cdc56c69718",
-      "name": "Accepted?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        880,
-        -100
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.data ?? $json.body }}",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "content-type",
-                "value": "text/xml; charset=utf-8"
-              }
-            ]
-          }
-        }
-      },
-      "id": "9f3adcb9-91e1-5ba3-aaad-6451b0b4232f",
-      "name": "Reply to WhatsApp (TwiML from AquaPulse)",
+      "id": "b5bfceb8-6605-4163-bac4-721338035220",
+      "name": "Return AquaPulse response to Twilio",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1.5,
       "position": [
-        1100,
-        -200
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "content-type",
-                "value": "text/xml; charset=utf-8"
-              }
-            ]
-          }
-        }
-      },
-      "id": "bd743b05-5fbd-5bab-92a0-2039c0603db2",
-      "name": "Upstream rejected: silent reply",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1100,
+        448,
         0
-      ]
-    },
-    {
+      ],
       "parameters": {
         "respondWith": "text",
-        "responseBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
+        "responseBody": "={{ typeof $json.body === 'string' ? $json.body : ($json.data ?? JSON.stringify($json.body ?? '')) }}",
         "options": {
-          "responseCode": 400
+          "responseCode": "={{ $json.statusCode ?? 200 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "={{ $json.headers?.[\"content-type\"] ?? \"text/xml; charset=utf-8\" }}"
+              }
+            ]
+          }
         }
-      },
-      "id": "ee6527c5-89fc-5385-9a1f-5cb1ba06a93e",
-      "name": "Malformed: reject",
+      }
+    },
+    {
+      "id": "37afaee2-ce4a-426a-a6dc-760aa10ed1b8",
+      "name": "AquaPulse unreachable: 502",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1.5,
       "position": [
-        660,
-        120
-      ]
+        448,
+        192
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "AquaPulse could not be reached.",
+        "options": {
+          "responseCode": 502,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "text/plain; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
     }
   ],
   "connections": {
@@ -221,36 +116,7 @@
       "main": [
         [
           {
-            "node": "Prepare forward",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare forward": {
-      "main": [
-        [
-          {
-            "node": "Valid?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Valid?": {
-      "main": [
-        [
-          {
             "node": "AquaPulse: verify, analyse, store",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Malformed: reject",
             "type": "main",
             "index": 0
           }
@@ -261,25 +127,14 @@
       "main": [
         [
           {
-            "node": "Accepted?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Accepted?": {
-      "main": [
-        [
-          {
-            "node": "Reply to WhatsApp (TwiML from AquaPulse)",
+            "node": "Return AquaPulse response to Twilio",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Upstream rejected: silent reply",
+            "node": "AquaPulse unreachable: 502",
             "type": "main",
             "index": 0
           }
@@ -288,8 +143,7 @@
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "executionTimeout": 120
+    "executionOrder": "v1"
   },
-  "active": false
+  "active": true
 }

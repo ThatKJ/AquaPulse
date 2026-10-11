@@ -47,7 +47,8 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias
 | Citizen ↔ official corroboration | PASS (API and local UI) | Deterministic. A flood report at Muzaffarpur returned CORROBORATED (+10, CWC flood alert active); the same at Bengaluru returned NO_OFFICIAL_SIGNAL (0). The delta is advisory: the local Evidence Score is not changed by it. Not yet exercised with a real WhatsApp report |
 | Scheduled ingestion | BLOCKED on approval | `/api/ingest/national` (secret required: 401 without) refreshes both sources and respects the single-flight lock. EventBridge Scheduler resources are written in the Lambda template but not created; the AWS CLI session has also expired |
 | Boundary depiction | PARTIAL | A Survey-of-India-depiction national outline (DataMeet, CC BY 4.0) now draws the country's extent, verified visually. District polygons are still geoBoundaries 2021, which stop short of that outline in the north, so that area has no district detail |
-| n8n, Twilio, WhatsApp inbound | BLOCKED | No n8n instance and no Twilio credentials exist |
+| WhatsApp inbound, real phone (Twilio → n8n → AquaPulse) | PARTIAL | 2026-10-11 06:02Z: a text from a real phone ran through n8n Cloud (workflow `XfaKArmc2N1OgAnd`, execution 18, success, 2.1 s), AquaPulse verified Twilio's signature against the n8n URL (`TWILIO_FORWARDER_URL`), stored the row and the acknowledgement was delivered. Signed test requests through n8n: bad signature 403, repeated `MessageSid` stored once. Location pin and photo through n8n from a real phone: not yet sent |
+| WhatsApp acknowledgement | PARTIAL | The Twilio number is a trial "Try out WhatsApp" number: it rejects TwiML replies (12300) and free text (21654). Replies go out as a Twilio-provided template (`TWILIO_ACK_CONTENT_SID`), delivered at 05:48Z and 06:02Z, so the wording is Twilio's sample text, not AquaPulse's. The AquaPulse wording needs the classic sandbox or a paid account |
 
 ## Demo / simulated (by design, labelled in the UI)
 
@@ -69,14 +70,13 @@ Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias
 | Area | Reason |
 | --- | --- |
 | Bedrock | Account-level restriction: `ValidationException: Operation not allowed` on 2026-10-10 07:36Z; Claude and Nova both NOT_AUTHORIZED; Anthropic use-case form unfilled. Only AWS Support can lift it. One check per session; no further calls made. The Lambda role has no Bedrock permission until a model is configured |
-| Citizen report from WhatsApp (Twilio → n8n → AquaPulse) | No Twilio account and no n8n instance. A local n8n via `npx` was attempted and abandoned after 20 minutes without finishing its install; the Docker daemon is not running. The AquaPulse half (webhook → Supabase → dashboard) is verified above |
-| Live alert | No Twilio account. Alerts are recorded on the demo transport |
-| Image in an inbound report | The report webhook only fetches media from Twilio hosts, so an image cannot arrive without Twilio. Photo analysis is verified through the upload path |
+| AquaPulse-worded WhatsApp reply | Twilio trial restriction (see WhatsApp acknowledgement above) |
+| Live alert | Not attempted: the trial number sends only Twilio templates. Alerts are recorded on the demo transport |
 
 ## Unverified
 
-- n8n workflows (`n8n/*.json`): generated to the export format, never imported into an instance.
-- Twilio: signature validation, media fetch (including the storage-bucket redirect rule) and live sending are unit-checked only.
+- n8n workflows other than `citizen-report.json` (`critical-alert`, `verification`, `intervention-result`): generated to the export format, never imported into an instance.
+- Twilio media fetch from a real WhatsApp photo (including the storage-bucket redirect rule), and Rekognition on such a photo: no real photo has been received yet.
 - The 1024-wide layout. Motion was measured (119 fps average at real speed) but not watched by a person.
 
 ## Known limits
