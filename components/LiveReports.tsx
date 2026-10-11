@@ -25,7 +25,12 @@ const OBSERVER: Record<EvidenceAnalysis["source"], string> = { rekognition: "AWS
  * A report without a location is announced but never placed: coordinates are not invented.
  * ponytail: 5 s polling; switch to Supabase Realtime if latency ever matters.
  */
-export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: Dispatch<Action> }) {
+export function LiveReports({ world, dispatch, announceRecent }: { world: WorldState; dispatch: Dispatch<Action>; announceRecent: boolean }) {
+  // Read once, on the first poll: a scenario run starts clean, the plain local view announces what just came in.
+  const recent = useRef(announceRecent);
+  useEffect(() => {
+    recent.current = announceRecent;
+  }, [announceRecent]);
   const seen = useRef<Set<string> | null>(null);
   const tMin = useRef(world.tMin);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -41,14 +46,16 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
         if (!res.ok) return;
         const { reports, serverTime } = (await res.json()) as { reports: LiveReport[]; serverTime: string };
         if (stop) return;
-        // Older reports are the baseline and are not replayed.
-        seen.current ??= new Set(reports.filter((r) => Date.parse(serverTime) - Date.parse(r.receivedAt) > RECENT_MS).map((r) => key(r)));
+        // Older reports are the baseline and are not replayed. Recent ones that predate this session are announced
+        // but not fused: only a report that arrives while the console is open may change what the engine shows.
+        const opening = !seen.current;
+        seen.current ??= new Set(reports.filter((r) => !recent.current || Date.parse(serverTime) - Date.parse(r.receivedAt) > RECENT_MS).map((r) => key(r)));
         const fresh = reports.filter((r) => !seen.current!.has(key(r))).reverse();
         for (const r of fresh) {
           seen.current.add(key(r));
           const evidenceId = `L-${r.id.slice(0, 6)}`;
           const placed = r.lat != null && r.lng != null;
-          if (placed)
+          if (placed && !opening)
             dispatch({
               type: "FUSE",
               event: {
@@ -106,7 +113,7 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
                 ? "No location shared, so it is not placed on the map. Ask the sender for a location pin."
                 : incident
                   ? `Fused into ${incident.id} by the normal rules · confidence ${Math.round(incident.evidenceScore?.total ?? 0)}/100.`
-                  : "Outside the demo district or not fusable; stored only."}
+                  : "Stored. Not merged into a local incident."}
             </p>
             {official && (
               <p className="mt-1.5 border-t border-hairline pt-1.5 text-muted">

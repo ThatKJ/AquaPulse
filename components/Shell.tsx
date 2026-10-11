@@ -137,7 +137,7 @@ export function Shell() {
         onSelectIncident={selectIncident}
         onSelectAsset={(id) => dispatch({ type: "SELECT_ASSET", id })}
       />
-      <LiveReports world={world} dispatch={dispatch} />
+      <LiveReports world={world} dispatch={dispatch} announceRecent={!demoOpen} />
       <Header getContext={getContext} hasIncident={incident != null} demoOpen={demoOpen} onToggleDemo={() => dispatch({ type: "DEMO_OPEN", open: !demoOpen })} />
       <CityPulse
         bottom={bottom}
