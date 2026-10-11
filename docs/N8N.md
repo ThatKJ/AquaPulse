@@ -17,6 +17,14 @@ curl -X POST https://aquapulse-liard.vercel.app/api/webhooks/report \\
 ```
 With the dashboard open on the flood scenario (step 5 or later) it appears within about five seconds and fuses into F-01.
 
+## Workflows on the instance
+
+| Workflow | Id | State | What it does |
+| --- | --- | --- | --- |
+| AquaPulse — Citizen Report Ingestion | `XfaKArmc2N1OgAnd` | Published | Twilio webhook → AquaPulse → reply. Source: `n8n/citizen-report.json` |
+| AquaPulse — National Data Refresh | `utycnfXQb1TjV2tH` | Published | Every 15 minutes reads `/api/national`, which makes the site refresh NDMA and IMD after responding. No secrets. First run 06:15Z on 2026-10-11 produced a sync with no visitor. Source: `n8n/national-refresh.sdk.js` |
+| AquaPulse — Critical Alert | `hnTKNXFrSpIu5Rbu` | Draft, not published | Gate (risk ≥ 80, confidence ≥ 70) → `POST /api/webhooks/alert` with one idempotency key per incident, 3 tries, failure branch. Needs a Header Auth credential (`x-aquapulse-secret`) created by hand; AquaPulse sends only to `TWILIO_ALLOWED_TO`, and the trial Twilio number cannot send free text anyway. Source: `n8n/critical-alert.sdk.js` |
+
 ## Endpoints the workflows call
 
 All require the header `x-aquapulse-secret: <WEBHOOK_SECRET>`. A missing or wrong secret returns 401; an unset secret on the server returns 503.
@@ -34,7 +42,7 @@ All require the header `x-aquapulse-secret: <WEBHOOK_SECRET>`. A missing or wron
 | File | Trigger | Steps | Failure handling |
 | --- | --- | --- | --- |
 | `citizen-report.json` (deployed) | Webhook `aquapulse/citizen-report` (Twilio's inbound WhatsApp webhook points here) | Forward the form body and Twilio signature unchanged to `POST /api/webhooks/twilio` → return AquaPulse's status, body and content type to Twilio | AquaPulse's 4xx (for example 403 on a bad signature) is passed through; 502 if AquaPulse cannot be reached. Idempotent on `MessageSid` in AquaPulse. No n8n variables or credentials needed. |
-| `critical-alert.json` | Webhook `aquapulse/incident-critical` with `{ incidentId, risk, evidenceScore, recipients[], area?, message? }` | Gate: risk ≥ 80 and evidence ≥ 70 → de-duplicate recipients → `POST /api/webhooks/alert` with key `alert:<incident>:critical` | Below threshold returns `sent: false`. One alert per incident regardless of retries. |
+| `critical-alert.sdk.js` (draft on the instance) | Webhook `aquapulse/incident-critical` with `{ incidentId, risk, evidenceScore, recipients[], area?, message? }` | Gate: risk ≥ 80 and evidence ≥ 70 → de-duplicate recipients → `POST /api/webhooks/alert` with key `alert:<incident>:critical` | Below threshold returns `sent: false`. One alert per incident regardless of retries. |
 | `verification.json` | Webhook `aquapulse/verification` with `{ incidentId, lat, lng, radiusM?, question? }` | Record the request → respond → wait 10 minutes → timeout note | No reply is never treated as confirmation; nothing escalates from this workflow. Validator replies arrive through the citizen-report workflow and re-score the incident. |
 | `intervention-result.json` | Webhook `aquapulse/action-complete` with `{ incidentId, bundleId, completedAt?, note? }` | `POST /api/webhooks/action-complete` → respond | 502 with the upstream error. Safe to retry. |
 

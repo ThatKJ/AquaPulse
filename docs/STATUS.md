@@ -1,8 +1,42 @@
 # AquaPulse status
 
-Updated 2026-10-10 (evening). A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment.
+Updated 2026-10-11 12:00 IST. A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment (`https://aquapulse-liard.vercel.app`). Every push to `main` deploys to production.
 
-Public site: https://aquapulse-liard.vercel.app/?demo=1 (Vercel production alias). The project is connected to GitHub, so every push to `main` deploys; env vars are stored in the Vercel project (they were first passed per deploy, which let a Git-triggered deploy go out without them and briefly broke AWS and the database on the public site).
+## Summary (authoritative)
+
+| Feature | Status | Real / simulated | Evidence | Limitation |
+| --- | --- | --- | --- | --- |
+| Landing page | PASS | Real figures from the live feed | Production 06:20Z: headline renders, 0 broken images, CTA opens `/live` | |
+| India map, live official data | PASS | LIVE_OFFICIAL (NDMA SACHET, IMD nowcast) | Production 06:16Z: CURRENT, 37 active alerts, 61 nowcasts, 56 districts need attention | District placement by name matching; some alerts name only a state |
+| Headless refresh of national data | PASS | Real | n8n schedule (every 15 min) ran 06:15:03Z and the site synced both feeds at 06:15:04–09Z with no visitor | Depends on the n8n Cloud trial staying active. An EventBridge alternative is prepared, unexecuted (REQUIRES_USER_APPROVAL) |
+| Water risk score | PASS | DERIVED | Two inputs with per-input points; river and heat shown as unknown | Two of four planned inputs |
+| India → state → district drill-down | PASS | Real | Production: India / Punjab / Patiala with the alert text and nowcast under "Why now" | No city level; district → Bengaluru opens a second map |
+| WhatsApp text, real phone | PASS | USER_REPORT, real | 06:02Z: Twilio → n8n (execution 18) → signature verified → one Supabase row → acknowledgement delivered | Reply is a Twilio trial template, not AquaPulse wording |
+| WhatsApp location pin, real phone | USER_BLOCKED | | Pairing verified through the production n8n webhook with signed synthetic requests (text then pin → one row with the pin's coordinates) and in tests | Needs a pin from a real phone |
+| WhatsApp photo, real phone | USER_BLOCKED | | Media host rules are tested; n8n forwards `MediaUrl0` unchanged | No real Twilio media URL has been fetched yet |
+| Rekognition on a real WhatsApp photo | USER_BLOCKED | | Same Lambda path as uploads, which is PASS | Needs the photo |
+| Rekognition on uploads | PASS | Real AWS | Production 06:14Z: `/api/evidence` returned `source: rekognition` in 1.96 s | |
+| AWS Lambda, CloudWatch, IAM | PASS | Real AWS | 401 without or with a wrong secret; role is `rekognition:DetectLabels` plus its own logs; log stream current | Deployed with a root session (runtime uses the role) |
+| Bedrock | BLOCKED_EXTERNAL | | Account restriction | Question box uses labelled templates |
+| Supabase / PostGIS | PASS | Real | Health PASS; RLS on all 22 application tables, no policies | |
+| n8n citizen-report workflow | PASS | Real | Published; repo file matches the deployed workflow | |
+| n8n critical-alert workflow | PARTIAL | | Draft on the instance, validated, not published | Needs a credential created by hand; nothing has been sent to anyone |
+| Flood scenario | PASS | SIMULATED city, deterministic model | Production 06:22Z: 14/14, 3,822 → 190, hospital PROTECTED | |
+| Best response | PASS | DERIVED | Winner Clear Drain D104 + Deploy Pump P02; ranking by engine score, 20 options simulated | |
+| Priority repairs | PASS | DERIVED from simulated history | D104 first, P031 second | |
+| Scarcity scenario | PASS | SIMULATED | Production: 6/6, deficit 3.7 ML/day, hospital prioritised | |
+| False-report scenario | PASS | SIMULATED | Production: 3/3, Unverified · 14/100, with a recent live report present in the feed | |
+| Scenarios unaffected by live reports | PASS | | Fixed 06:20Z: a report sent just before a scenario run was being merged into it (false report read 31/100). Scenario runs now start clean | A report arriving during a run is still shown and merged, by design |
+| Question box | PASS | Template over engine output | Answer labelled "Grounded system response … Not an LLM" | No LLM |
+| Responsive | PASS | | No horizontal overflow at 1366, 1440, 1920 and 390 (landing) | Console is desktop only |
+| Accessibility | PARTIAL | | Labels, focus rings, reduced motion, non-colour risk cues in place | No keyboard or screen-reader pass this round |
+| Security | PASS with PARTIAL items | | `docs/SECURITY_REVIEW.md` | No CSP, in-memory rate limit, open console |
+| Performance | PASS | | `docs/PERFORMANCE.md` | |
+| Tests | PASS | | 56 tests (engine, scenarios, national, webhook); typecheck, lint, build clean | Browser checks are scripted Playwright runs, not a committed E2E suite |
+| EventBridge scheduler | DEFERRED | | Change set `deploy-20261011-023903` exists, unexecuted | Optional now |
+| Before/after ghost layer, presentation mode, city level, national basemap | DEFERRED | | Not built | |
+
+The sections below are the dated evidence log behind this table; where they disagree with it, the table is newer.
 
 ## Live (verified on the public path)
 

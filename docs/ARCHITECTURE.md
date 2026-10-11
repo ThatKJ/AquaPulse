@@ -2,6 +2,27 @@
 
 Describes what is implemented. Integration state lives in `docs/STATUS.md`.
 
+## Data paths (as deployed, 2026-10-11)
+
+```
+NATIONAL      NDMA SACHET (CAP) ─┐
+              IMD district nowcast ┴─► lib/national (parse, match district, expiry) ─► Supabase
+              trigger: n8n schedule every 15 min reads /api/national, which refreshes after responding
+                                                                                      │
+                                              /live: India → state → district ◄───────┘
+
+CITIZEN       WhatsApp ─► Twilio ─► n8n webhook ─► /api/webhooks/twilio
+                                    (forwards form + signature)   │ verify signature (own URL or TWILIO_FORWARDER_URL)
+                                                                  │ store once per MessageSid, hash sender, pair location
+                                                                  ├─► Supabase/PostGIS
+                                                                  └─► photo: fetch from Twilio only ─► AWS Lambda ─► Rekognition
+                                              console polls /api/reports every 5 s
+
+DECISION      evidence ─► fusion ─► confidence ─► prediction ─► best response ─► outcome
+(browser,     ─► recurring problems ─► priority repairs
+ pure engine)
+```
+
 ```
 Browser (Next.js client)
   WorldState ──► engine (pure TS) ──► predictions, auction, scores, priorities

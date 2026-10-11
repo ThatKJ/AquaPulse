@@ -1,4 +1,6 @@
-# Scheduler plan — READY_FOR_APPROVAL
+# Scheduler plan — optional, REQUIRES_USER_APPROVAL
+
+**Update 2026-10-11:** headless refresh now exists without AWS: an n8n schedule reads `/api/national` every 15 minutes (see `docs/N8N.md`). The EventBridge change set below is a second, independent trigger. It is still unexecuted and is no longer needed for the demo.
 
 **Why:** the national feeds refresh only after someone reads `/api/national`. With no visitors the data goes stale.
 
