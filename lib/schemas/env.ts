@@ -23,6 +23,8 @@ const ServerEnvSchema = z.object({
   TWILIO_ALLOWED_TO: opt,
   /** Twilio-provided template (HX…) for acknowledgements. Trial WhatsApp numbers accept only these, not free text. */
   TWILIO_ACK_CONTENT_SID: opt,
+  /** Exact public URL of an orchestrator webhook (n8n) that Twilio calls and that forwards here unchanged. */
+  TWILIO_FORWARDER_URL: opt,
   /** Set when an n8n instance has the AquaPulse workflows imported. Informational: shown in the trust strip. */
   N8N_BASE_URL: opt,
   /** Shared secret n8n sends as `x-aquapulse-secret` on webhook calls. */

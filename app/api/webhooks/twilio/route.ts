@@ -39,7 +39,10 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
     // Twilio signature must still verify, so a forwarder cannot invent messages.
     const forwardedUrl = secretOk ? req.headers.get("x-twilio-original-url") : null;
     const signature = req.headers.get("x-twilio-signature");
-    if (!signature || !validTwilioSignature(env.TWILIO_AUTH_TOKEN, forwardedUrl || publicUrl(req), params, signature))
+    // TWILIO_FORWARDER_URL is the same idea without a shared secret: the one orchestrator URL this server accepts
+    // signatures for. Only Twilio can produce a signature for it, so the forwarder needs no credential at all.
+    const signedUrls = [forwardedUrl || publicUrl(req), env.TWILIO_FORWARDER_URL].filter((u): u is string => Boolean(u));
+    if (!signature || !signedUrls.some((u) => validTwilioSignature(env.TWILIO_AUTH_TOKEN!, u, params, signature)))
       throw new HttpError(403, "INVALID_SIGNATURE", "Missing or invalid X-Twilio-Signature.");
   } else {
     // No Twilio token: only a caller holding WEBHOOK_SECRET may use this endpoint. It is never open.
