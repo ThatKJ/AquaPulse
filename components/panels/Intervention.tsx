@@ -92,6 +92,7 @@ export function Simulator({
   noun,
   kind,
   applied,
+  alone,
   facilityName,
   onPick,
   onPreview,
@@ -99,6 +100,8 @@ export function Simulator({
   auction: AuctionResult | null;
   /** A bundle is already applied to this incident: the ladder now ranks what could be added on top. */
   applied: boolean;
+  /** Each action of the winning pair simulated on its own. */
+  alone: { label: string; exposure: number; changePct: number }[];
   /** The picked option, or the winner while nothing is picked. */
   chosen: AuctionOption | undefined;
   horizon: Horizon;
@@ -182,6 +185,18 @@ export function Simulator({
           {auction.evaluated} feasible bundles simulated · top {auction.options.length} shown
         </p>
       </section>
+
+      {alone.length > 0 && !applied && (
+        <Section title="Each action alone">
+          <dl className={ROWS}>
+            {alone.map((a) => (
+              <Row key={a.label} label={a.label}>
+                est. {fmt(a.exposure)} {short} · {pctChange(a.changePct)}
+              </Row>
+            ))}
+          </dl>
+        </Section>
+      )}
 
       <Section
         title={chosen === winner ? "Best response" : "Selected response"}

@@ -101,6 +101,17 @@ export function IncidentDrawer({
   const chosen = auction?.options.find((o) => o.bundle.id === picked) ?? winner;
   // The engine counts flood-exposed plus water-short people in auction exposure.
   const noun = flood ? "exposed" : "people affected";
+  // Each action of the winning pair on its own, so the panel shows why the pair wins.
+  const alone = useMemo(
+    () =>
+      winner && winner.bundle.interventions.length > 1
+        ? winner.bundle.interventions.flatMap((iv) => {
+            const o = safe(() => engine.simulateBundle(world, { id: iv.label, label: iv.label, interventions: [iv] }, horizon || 30));
+            return o ? [{ label: iv.label, exposure: o.exposure, changePct: o.exposureChangePct }] : [];
+          })
+        : [],
+    [world, winner, horizon],
+  );
   const alerts = world.alerts.filter((a) => a.incidentId === incident.id);
 
   // Facilities over the engine threshold now, and those the intervention took back under it.
@@ -181,6 +192,7 @@ export function IncidentDrawer({
               noun={noun}
               kind={incident.kind}
               applied={!!record}
+              alone={alone}
               facilityName={facilityName}
               onPick={setPicked}
               onPreview={onPreview}

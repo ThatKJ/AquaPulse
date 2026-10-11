@@ -72,6 +72,18 @@ describe("flood-cascade end to end", () => {
     expect(both.facilitiesProtected).toContain("HOSP-1");
   });
 
+  // The numbers the demo, the docs and the judges' script quote. A tuning change must change them here on purpose.
+  it("pins the quoted flood numbers: 3,822 baseline, P02 2,568, D104 1,067, both 190", () => {
+    expect(engine.predict(before, 30).totals.exposedPopulation).toBe(3822);
+    expect(sim(pump).exposure).toBe(2568);
+    expect(sim(drain).exposure).toBe(1067);
+    expect(sim(drain, pump).exposure).toBe(190);
+    const win = engine.runAuction(before, "F-01", 30).options[0];
+    expect(win.bundle.label).toBe("Clear Drain D104 + Deploy Pump P02");
+    expect(win.outcome.exposure).toBe(190);
+    expect(engine.predict(at(14), 30).totals.exposedPopulation).toBe(190);
+  });
+
   it("the auction picks the pair over every single action", () => {
     const a = engine.runAuction(before, "F-01", 30);
     expect(a.evaluated).toBeGreaterThan(5);
