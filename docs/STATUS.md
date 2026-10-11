@@ -1,6 +1,26 @@
 # AquaPulse status
 
-Updated 2026-10-11 12:00 IST. A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment (`https://aquapulse-liard.vercel.app`). Every push to `main` deploys to production.
+Updated 2026-10-11 19:20 IST. A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment (`https://aquapulse-liard.vercel.app`). Every push to `main` deploys to production.
+
+## Re-verification, 2026-10-11 18:40–19:20 IST (commit after `bd3289e`)
+
+Every row below was checked again against production unless noted.
+
+- Gates: typecheck, lint (0 errors), 57 tests, build.
+- Engine numbers are now pinned exactly by a test: 3,822 baseline, P02 alone 2,568, D104 alone 1,067, both 190; winner "Clear Drain D104 + Deploy Pump P02".
+- Best-response panel now also lists each action of the winning pair alone (engine-simulated), so 2,568 and 1,067 are on screen.
+- Production browser run: landing, `/live` India → Haryana → Ambala, flood 14/14, scarcity 6/6 (2.5 → 3.7 ML/day), false report 14/100, D104 before P031, zero console errors, zero failed requests, no horizontal overflow at 1366, 1920 and 390.
+- Demo isolation: the false-report score stayed 14/100 with three synthetic reports in the feed from the previous minutes.
+- National data: NDMA and IMD CURRENT; n8n refresh ran every 15 minutes from 11:00Z to 13:00Z, all successful; 11 sync runs in two hours.
+- Citizen path through production n8n with signed synthetic requests: bad signature 403, signature for another URL 403, text 200, repeated message idempotent, pin paired into one row, photo fields forwarded, a link-local media URL fetched nothing.
+- Rekognition: `/api/evidence` returned `source: rekognition` in 1.3 s.
+- Supabase: no table without row-level security, no policies.
+- Unauthenticated POSTs to every write endpoint: 401, 403 or 400. No CORS header on API routes.
+- Keyboard pass on the local and national views: every button, link and input has a name and a visible focus ring, Escape closes the question panel. Open: the map's overlay canvas is a second, unnamed tab stop; no screen-reader pass.
+- Not re-run: the direct Lambda wrong-secret probe (the AWS CLI session had expired; it passed earlier today).
+- Still needs a real phone: location pin, photo, Rekognition on a WhatsApp photo.
+- Critical Alert workflow: draft, unpublished, READY_AFTER_HACKATHON.
+- New: `DEMO_SCRIPT_FINAL.md`, `JUDGE_QA.md`, `ARCHITECTURE_FINAL.md`, `screenshots/final-r2/`.
 
 ## Summary (authoritative)
 
@@ -32,7 +52,7 @@ Updated 2026-10-11 12:00 IST. A row is PASS only if it was verified by a real ca
 | Accessibility | PARTIAL | | Labels, focus rings, reduced motion, non-colour risk cues in place | No keyboard or screen-reader pass this round |
 | Security | PASS with PARTIAL items | | `docs/SECURITY_REVIEW.md` | No CSP, in-memory rate limit, open console |
 | Performance | PASS | | `docs/PERFORMANCE.md` | |
-| Tests | PASS | | 56 tests (engine, scenarios, national, webhook); typecheck, lint, build clean | Browser checks are scripted Playwright runs, not a committed E2E suite |
+| Tests | PASS | | 57 tests (engine, scenarios, national, webhook); typecheck, lint, build clean | Browser checks are scripted Playwright runs, not a committed E2E suite |
 | EventBridge scheduler | DEFERRED | | Change set `deploy-20261011-023903` exists, unexecuted | Optional now |
 | Before/after ghost layer, presentation mode, city level, national basemap | DEFERRED | | Not built | |
 

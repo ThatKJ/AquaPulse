@@ -65,7 +65,7 @@ npm run doctor                    # one line per integration, real calls only
 Copy `.env.example` to `.env.local` for integrations. The scenarios need none.
 
 ## Demo
-Three-minute script: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md). Screenshots: [`docs/screenshots/final/`](docs/screenshots/final). In the scenario view: Space play/pause, → next, R reset.
+Three-minute script: [`docs/DEMO_SCRIPT_FINAL.md`](docs/DEMO_SCRIPT_FINAL.md). Judge questions: [`docs/JUDGE_QA.md`](docs/JUDGE_QA.md). One-page architecture: [`docs/ARCHITECTURE_FINAL.md`](docs/ARCHITECTURE_FINAL.md). Screenshots: [`docs/screenshots/final-r2/`](docs/screenshots/final-r2). In the scenario view: Space play/pause, → next, R reset.
 
 ## More
 [Status](docs/STATUS.md) · [n8n and Twilio](docs/N8N.md) · [AWS setup](docs/AWS_SETUP.md) · [Database](docs/DATABASE.md) · [Data provenance](docs/DATA_PROVENANCE.md) · [National sources](docs/NATIONAL_DATA_SOURCES.md) · [Performance](docs/PERFORMANCE.md) · [Design system](docs/DESIGN_SYSTEM.md) · [Decisions](docs/DECISIONS.md)
