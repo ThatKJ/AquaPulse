@@ -8,7 +8,7 @@ Updated 2026-10-11 12:00 IST. A row is PASS only if it was verified by a real ca
 | --- | --- | --- | --- | --- |
 | Landing page | PASS | Real figures from the live feed | Production 06:20Z: headline renders, 0 broken images, CTA opens `/live` | |
 | India map, live official data | PASS | LIVE_OFFICIAL (NDMA SACHET, IMD nowcast) | Production 06:16Z: CURRENT, 37 active alerts, 61 nowcasts, 56 districts need attention | District placement by name matching; some alerts name only a state |
-| Headless refresh of national data | PASS | Real | n8n schedule (every 15 min) ran 06:15:03Z and the site synced both feeds at 06:15:04–09Z with no visitor | Depends on the n8n Cloud trial staying active. An EventBridge alternative is prepared, unexecuted (REQUIRES_USER_APPROVAL) |
+| Headless refresh of national data | PASS | Real | n8n schedule (every 15 min) ran at 06:15:03Z and 06:30:03Z; the site synced both feeds at 06:15:04–09Z with no visitor | Depends on the n8n Cloud trial staying active. An EventBridge alternative is prepared, unexecuted (REQUIRES_USER_APPROVAL) |
 | Water risk score | PASS | DERIVED | Two inputs with per-input points; river and heat shown as unknown | Two of four planned inputs |
 | India → state → district drill-down | PASS | Real | Production: India / Punjab / Patiala with the alert text and nowcast under "Why now" | No city level; district → Bengaluru opens a second map |
 | WhatsApp text, real phone | PASS | USER_REPORT, real | 06:02Z: Twilio → n8n (execution 18) → signature verified → one Supabase row → acknowledgement delivered | Reply is a Twilio trial template, not AquaPulse wording |
