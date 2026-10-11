@@ -97,6 +97,16 @@ describe("twilio webhook", () => {
     expect(await (await send({ MessageSid: sid(), From: "whatsapp:+910000000007", Body: "TEST REPORT: elsewhere" })).text()).toContain("share your location");
   });
 
+  it("does not store the sandbox opt-in message as a report", async () => {
+    const before = (await repo().listRecentEvidence(100)).length;
+    const res = await send({ MessageSid: sid(), From: "whatsapp:+910000000009", Body: "join twilio-trial" });
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("Reference");
+    expect((await repo().listRecentEvidence(100)).length).toBe(before);
+    // A real report that merely starts with the word is still stored.
+    expect(await (await send({ MessageSid: sid(), From: "whatsapp:+910000000009", Body: "join road flooded near the lake" })).text()).toContain("Reference");
+  });
+
   it("rejects out-of-range coordinates", async () => {
     expect((await send({ MessageSid: sid(), From: "whatsapp:+910000000008", Latitude: "999", Longitude: "77" })).status).toBe(400);
   });

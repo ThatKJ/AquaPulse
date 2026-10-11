@@ -57,6 +57,8 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
   const reply = (text: string) => acknowledge(requestId, m.To, m.From, text);
   const since = new Date(Date.now() - PAIR_WINDOW_MIN * 60_000).toISOString();
   const hasContent = Boolean(m.Body.trim() || m.MediaUrl0);
+  // The Twilio sandbox opt-in ("join <code>") reaches this webhook too. It is not a report.
+  if (/^join [a-z]+(-[a-z]+)*$/i.test(m.Body.trim()) && !m.MediaUrl0 && m.Latitude == null) return twiml(requestId, "");
   let lat = m.Latitude;
   let lng = m.Longitude;
 

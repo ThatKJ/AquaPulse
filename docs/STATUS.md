@@ -18,7 +18,8 @@ Every row below was checked again against production unless noted.
 - Unauthenticated POSTs to every write endpoint: 401, 403 or 400. No CORS header on API routes.
 - Keyboard pass on the local and national views: every button, link and input has a name and a visible focus ring, Escape closes the question panel. Open: the map's overlay canvas is a second, unnamed tab stop; no screen-reader pass.
 - Not re-run: the direct Lambda wrong-secret probe (the AWS CLI session had expired; it passed earlier today).
-- Still needs a real phone: location pin, photo, Rekognition on a WhatsApp photo.
+- Real phone, 13:31–13:32Z: text and location pin PASS; the photo was received and stored, but Twilio's trial blocks media download (error 20003), so Rekognition did not run on it.
+- The sandbox opt-in message ("join <code>") is no longer stored as a report (58 tests).
 - Critical Alert workflow: draft, unpublished, READY_AFTER_HACKATHON.
 - New: `DEMO_SCRIPT_FINAL.md`, `JUDGE_QA.md`, `ARCHITECTURE_FINAL.md`, `screenshots/final-r2/`.
 
@@ -32,9 +33,9 @@ Every row below was checked again against production unless noted.
 | Water risk score | PASS | DERIVED | Two inputs with per-input points; river and heat shown as unknown | Two of four planned inputs |
 | India → state → district drill-down | PASS | Real | Production: India / Punjab / Patiala with the alert text and nowcast under "Why now" | No city level; district → Bengaluru opens a second map |
 | WhatsApp text, real phone | PASS | USER_REPORT, real | 06:02Z: Twilio → n8n (execution 18) → signature verified → one Supabase row → acknowledgement delivered | Reply is a Twilio trial template, not AquaPulse wording |
-| WhatsApp location pin, real phone | USER_BLOCKED | | Pairing verified through the production n8n webhook with signed synthetic requests (text then pin → one row with the pin's coordinates) and in tests | Needs a pin from a real phone |
-| WhatsApp photo, real phone | USER_BLOCKED | | Media host rules are tested; n8n forwards `MediaUrl0` unchanged | No real Twilio media URL has been fetched yet |
-| Rekognition on a real WhatsApp photo | USER_BLOCKED | | Same Lambda path as uploads, which is PASS | Needs the photo |
+| WhatsApp location pin, real phone | PASS | USER_REPORT, real | 13:31–13:32Z: text (n8n execution 66) then pin (execution 68) from a real phone → one report row carrying the pin's coordinates; acknowledgement delivered (201) | Reply is a Twilio trial template |
+| WhatsApp photo, real phone | PARTIAL | USER_REPORT, real | 13:32Z: photo message (execution 67) verified, stored once, acknowledged | The image itself cannot be downloaded: Twilio answers 401, error 20003 "not available on a Trial account" |
+| Rekognition on a real WhatsApp photo | BLOCKED_EXTERNAL | | Twilio trial refuses media download (20003), confirmed with a direct read-only API call | Works only after a Twilio upgrade (not approved). Uploads through the console reach Rekognition (PASS) |
 | Rekognition on uploads | PASS | Real AWS | Production 06:14Z: `/api/evidence` returned `source: rekognition` in 1.96 s | |
 | AWS Lambda, CloudWatch, IAM | PASS | Real AWS | 401 without or with a wrong secret; role is `rekognition:DetectLabels` plus its own logs; log stream current | Deployed with a root session (runtime uses the role) |
 | Bedrock | BLOCKED_EXTERNAL | | Account restriction | Question box uses labelled templates |
@@ -52,7 +53,7 @@ Every row below was checked again against production unless noted.
 | Accessibility | PARTIAL | | Labels, focus rings, reduced motion, non-colour risk cues in place | No keyboard or screen-reader pass this round |
 | Security | PASS with PARTIAL items | | `docs/SECURITY_REVIEW.md` | No CSP, in-memory rate limit, open console |
 | Performance | PASS | | `docs/PERFORMANCE.md` | |
-| Tests | PASS | | 57 tests (engine, scenarios, national, webhook); typecheck, lint, build clean | Browser checks are scripted Playwright runs, not a committed E2E suite |
+| Tests | PASS | | 58 tests (engine, scenarios, national, webhook); typecheck, lint, build clean | Browser checks are scripted Playwright runs, not a committed E2E suite |
 | EventBridge scheduler | DEFERRED | | Change set `deploy-20261011-023903` exists, unexecuted | Optional now |
 | Before/after ghost layer, presentation mode, city level, national basemap | DEFERRED | | Not built | |
 
