@@ -292,7 +292,7 @@ export function FixFirstPanel({
   onSelectAsset: (id: string | null) => void;
 }) {
   return (
-    <aside aria-label="Fix this first" className={DRAWER}>
+    <aside aria-label="Priority repairs" className={DRAWER}>
       <header className="px-4 py-3">
         <div className="flex items-center justify-between">
           <Label>Priority repairs</Label>

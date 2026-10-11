@@ -157,7 +157,7 @@ export function fuse(state: WorldState, event: EvidenceEvent): WorldState {
   if (note) next = withStream(next, { kind: "fusion", incidentId: scored.id, title: note });
   return withStream(next, {
     kind: "score", incidentId: scored.id,
-    title: `${scored.id} Evidence Score ${score.total} → ${score.verdict.toUpperCase()}`,
+    title: `${scored.id} confidence ${score.total} → ${score.verdict.toUpperCase()}`,
     detail: score.components.map((c) => `${c.label} ${c.value}`).join(" · "),
   });
 }

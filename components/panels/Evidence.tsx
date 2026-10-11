@@ -65,7 +65,7 @@ function HistoryStrip({ points }: { points: ScorePoint[] }) {
           <div>Score</div>
           <div>Reports</div>
         </div>
-        <ol className="tabular flex min-w-0 flex-1 gap-2.5 text-[13px] leading-[18px]" aria-label="Evidence Score over time">
+        <ol className="tabular flex min-w-0 flex-1 gap-2.5 text-[13px] leading-[18px]" aria-label="Confidence over time">
           {points.slice(from).map((p, i) => {
             const idx = from + i;
             const last = idx === points.length - 1;

@@ -156,7 +156,7 @@ const floodCascade: DemoStep[] = [
   },
   {
     id: "escalate", label: "Score escalates", advanceMin: 2,
-    narration: "With independent confirmations, matching rain and D104's failure history, the Evidence Score crosses the escalate threshold and the incident is verified.",
+    narration: "With independent confirmations, matching rain and D104's failure history, confidence crosses the escalate threshold and the incident is verified.",
     focus: { mode: "flood", horizon: 0, incidentId: "F-01", openPanel: "evidence" },
     apply: (s) => {
       const a = analysed(s, E2, blockedDrain(0.81, 0.8, [25, 45], "Drain overflow with standing water 25–45 cm deep along a shop frontage."));
@@ -184,7 +184,7 @@ const floodCascade: DemoStep[] = [
     },
   },
   {
-    id: "auction", label: "Action auction", advanceMin: 1,
+    id: "auction", label: "Best response", advanceMin: 1,
     narration: "The engine simulates every feasible action and pair with the crews and pumps that are free, and recommends the best one.",
     focus: { mode: "flood", horizon: 30, incidentId: "F-01", openPanel: "simulate" },
     apply: (s) => {
@@ -343,7 +343,7 @@ const falseReport: DemoStep[] = [
       const i = s.incidents[s.incidents.length - 1];
       const calm = people(initialWorld(), 30);
       const now = people(s, 30);
-      return withStream(s, { kind: "system", incidentId: i?.id, title: `${i?.id} held at Evidence Score ${i?.evidenceScore?.total} (${i?.status})`, detail: `+30 peak flood risk ${calm.maxFloodRisk} → ${now.maxFloodRisk}; people exposed ${fmt(calm.exposedPopulation)} → ${fmt(now.exposedPopulation)}. No action recommended.` });
+      return withStream(s, { kind: "system", incidentId: i?.id, title: `${i?.id} held at confidence ${i?.evidenceScore?.total} (${i?.status})`, detail: `+30 peak flood risk ${calm.maxFloodRisk} → ${now.maxFloodRisk}; people exposed ${fmt(calm.exposedPopulation)} → ${fmt(now.exposedPopulation)}. No action recommended.` });
     },
   },
 ];
