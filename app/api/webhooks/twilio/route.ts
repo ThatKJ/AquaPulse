@@ -3,6 +3,7 @@ import { validTwilioSignature } from "@/lib/alerts";
 import { safeEqual } from "@/lib/aws/clients";
 import { serverEnv } from "@/lib/schemas/env";
 import { repo } from "@/lib/db";
+import { logOp } from "@/lib/aws/clients";
 import { handle, HttpError, ingestReport, readText, reporterKey } from "../../_lib";
 
 const num = (min: number, max: number) =>
@@ -10,6 +11,7 @@ const num = (min: number, max: number) =>
 const TwilioInboundSchema = z.object({
   MessageSid: z.string().min(1).max(128),
   From: z.string().max(64),
+  To: z.string().max(64).optional(),
   Body: z.string().default("").transform((s) => s.slice(0, 1000)),
   Latitude: num(-90, 90),
   Longitude: num(-180, 180),
@@ -49,6 +51,7 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
   if (!parsed.success) throw new HttpError(400, "INVALID_REQUEST", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
   const m = parsed.data;
   const { reporterId } = reporterKey(m.From);
+  const reply = (text: string) => acknowledge(requestId, m.To, m.From, text);
   const since = new Date(Date.now() - PAIR_WINDOW_MIN * 60_000).toISOString();
   const hasContent = Boolean(m.Body.trim() || m.MediaUrl0);
   let lat = m.Latitude;
@@ -58,7 +61,7 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
   // A pin that only completes an earlier report is not stored as a report of its own.
   if (lat != null && lng != null && !hasContent && reporterId) {
     const filled = await repo().fillReporterLocation(reporterId, lat, lng, since);
-    if (filled > 0) return twiml(requestId, "AquaPulse added your location to your report. Evidence is being checked.");
+    if (filled > 0) return reply("Location added to your report.\nEvidence is being checked.");
   }
   if ((lat == null || lng == null) && reporterId) {
     const recent = await repo().reporterRecentLocation(reporterId, since);
@@ -70,15 +73,46 @@ export const POST = handle("webhooks/twilio", async (req, requestId) => {
 
   // The reply never claims an emergency: one report is evidence to check, not a confirmed incident.
   const ref = `AQ-${result.evidenceId.replace(/-/g, "").slice(0, 5).toUpperCase()}`;
-  if (result.duplicate) return twiml(requestId, `AquaPulse already has this report. Reference: ${ref}`);
-  if (lat == null || lng == null) return twiml(requestId, `AquaPulse received your report. Please share your location (attach → Location) so it can be placed on the map. Reference: ${ref}`);
-  return twiml(requestId, `AquaPulse received your report. Evidence is being checked. Reference: ${ref}`);
+  if (result.duplicate) return reply(`AquaPulse already has this report.\nReference: ${ref}`);
+  if (lat == null || lng == null) return reply(`AquaPulse received your report.\nPlease share your location so it can be placed on the map.\nReference: ${ref}`);
+  if (m.MediaUrl0) return reply(`Photo received for ${ref}.\nEvidence is being checked.`);
+  return reply(`AquaPulse received your report.\nEvidence is being checked.\nReference: ${ref}`);
 });
+
+/**
+ * Acknowledge to the sender of a signed inbound message, and to nobody else. The reply goes through the REST API
+ * because Twilio's trial WhatsApp number rejects TwiML replies (error 12300). If the REST send is not possible or
+ * is refused, the same text is returned as TwiML, which the regular sandbox and production senders accept.
+ */
+async function acknowledge(requestId: string, ourNumber: string | undefined, sender: string, message: string): Promise<Response> {
+  const env = serverEnv();
+  if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && ourNumber) {
+    const start = Date.now();
+    let status = 0;
+    let code: string | undefined;
+    try {
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.TWILIO_ACCOUNT_SID)}/Messages.json`, {
+        method: "POST",
+        headers: { authorization: "Basic " + Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString("base64"), "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ From: ourNumber, To: sender, Body: message }),
+        signal: AbortSignal.timeout(5000),
+      });
+      status = res.status;
+      if (!res.ok) code = String(((await res.json().catch(() => ({}))) as { code?: number }).code ?? "");
+    } catch {
+      // falls back to TwiML below
+    }
+    const ok = status >= 200 && status < 300;
+    logOp({ service: "twilio", op: "reply", requestId, durationMs: Date.now() - start, status: ok ? "ok" : "error", httpStatus: status, code });
+    if (ok) return twiml(requestId, "");
+  }
+  return twiml(requestId, message);
+}
 
 const PAIR_WINDOW_MIN = 15;
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function twiml(requestId: string, message: string): Response {
-  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${xml(message)}</Message></Response>`, {
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${message ? `<Message>${xml(message)}</Message>` : ""}</Response>`, {
     headers: { "content-type": "text/xml; charset=utf-8", "x-request-id": requestId },
   });
 }

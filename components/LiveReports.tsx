@@ -13,6 +13,8 @@ type Notice = { report: LiveReport; evidenceId: string; placed: boolean; officia
 const OFFICIAL_LABEL: Record<Official["corroborationStatus"], string> = { CORROBORATED: "Corroborated by official data", PARTIALLY_CORROBORATED: "Partly corroborated by official data", NO_OFFICIAL_SIGNAL: "No official signal", CONFLICTING: "Conflicts with official data" };
 
 const POLL_MS = 5000;
+// Reports this recent are announced when the console opens, so one sent just before opening it is not missed.
+const RECENT_MS = 15 * 60_000;
 // A report can gain a location (a pin sent after the photo) or an analysis after it is first seen, so each state is tracked.
 const key = (r: LiveReport) => `${r.id}:${r.lat != null ? "placed" : "unplaced"}:${r.analysis ? "analysed" : "raw"}`;
 const OBSERVER: Record<EvidenceAnalysis["source"], string> = { rekognition: "AWS Rekognition · live AWS", bedrock: "Amazon Bedrock · live AWS", fixture: "Recorded analysis" };
@@ -37,12 +39,10 @@ export function LiveReports({ world, dispatch }: { world: WorldState; dispatch: 
       try {
         const res = await fetch("/api/reports", { cache: "no-store" });
         if (!res.ok) return;
-        const { reports } = (await res.json()) as { reports: LiveReport[] };
+        const { reports, serverTime } = (await res.json()) as { reports: LiveReport[]; serverTime: string };
         if (stop) return;
-        if (!seen.current) {
-          seen.current = new Set(reports.map((r) => key(r)));
-          return;
-        }
+        // Older reports are the baseline and are not replayed.
+        seen.current ??= new Set(reports.filter((r) => Date.parse(serverTime) - Date.parse(r.receivedAt) > RECENT_MS).map((r) => key(r)));
         const fresh = reports.filter((r) => !seen.current!.has(key(r))).reverse();
         for (const r of fresh) {
           seen.current.add(key(r));
