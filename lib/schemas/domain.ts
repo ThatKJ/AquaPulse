@@ -164,7 +164,7 @@ export type Alert = {
   audience: string;
   body: string;
   /** "demo" transport is a simulation and must be labelled as such in the UI. */
-  transport: "twilio" | "demo";
+  transport: "twilio" | "sns" | "demo";
   status: "queued" | "sent" | "failed";
 };
 

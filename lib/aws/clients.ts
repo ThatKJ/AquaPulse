@@ -8,6 +8,8 @@ import {
   type ConverseCommandOutput,
 } from "@aws-sdk/client-bedrock-runtime";
 import { RekognitionClient } from "@aws-sdk/client-rekognition";
+import { S3Client } from "@aws-sdk/client-s3";
+import { SNSClient } from "@aws-sdk/client-sns";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import { z } from "zod";
 import { ALLOWED_IMAGE_TYPES, HealthResponseSchema, type HealthResponse } from "../schemas/api";
@@ -27,8 +29,12 @@ export function clientConfig(maxAttempts = 3) {
 let _bedrock: BedrockRuntimeClient | undefined;
 let _rekognition: RekognitionClient | undefined;
 let _sts: STSClient | undefined;
+let _sns: SNSClient | undefined;
+let _s3: S3Client | undefined;
 export const bedrockRuntime = () => (_bedrock ??= new BedrockRuntimeClient(clientConfig()));
 export const rekognition = () => (_rekognition ??= new RekognitionClient(clientConfig()));
+export const snsClient = () => (_sns ??= new SNSClient(clientConfig()));
+export const s3Client = () => (_s3 ??= new S3Client(clientConfig()));
 const sts = () => (_sts ??= new STSClient(clientConfig()));
 
 /** Mask anything that looks like an AWS account id (12 digits) down to its last 4. */

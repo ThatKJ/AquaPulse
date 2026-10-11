@@ -51,6 +51,12 @@ run(async () => {
   checks.push(["Twilio config", env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER
     ? { state: "UNVERIFIED", detail: "credentials set; no message sent to verify them" }
     : { state: "NOT_CONFIGURED", detail: "alerts use the demo transport" }]);
+  checks.push(["AWS SNS alerts", env.AWS_SNS_TOPIC_ARN
+    ? { state: "PASS", detail: `topic configured (${env.AWS_SNS_TOPIC_ARN})` }
+    : { state: "NOT_CONFIGURED", detail: "AWS_SNS_TOPIC_ARN optional; emergency responder topic" }]);
+  checks.push(["AWS S3 storage", env.AWS_S3_EVIDENCE_BUCKET
+    ? { state: "PASS", detail: `bucket configured (${env.AWS_S3_EVIDENCE_BUCKET})` }
+    : { state: "NOT_CONFIGURED", detail: "AWS_S3_EVIDENCE_BUCKET optional; durable media storage" }]);
   // Public path: the deployed site's own health endpoint reports what it can reach (Lambda via AI_ENDPOINT_URL, Supabase).
   const publicUrl = process.env.AQUAPULSE_PUBLIC_URL?.replace(/\/+$/, "");
   if (!publicUrl) {

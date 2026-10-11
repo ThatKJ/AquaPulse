@@ -30,8 +30,8 @@ export type MediaMeta = { contentType: string; sizeBytes: number; sha256: string
 /** A report that arrived from outside (webhook), as the console needs it. No reporter identity. */
 export type LiveReport = { id: string; channel: NewEvidence["channel"]; text: string; receivedAt: string; lat?: number; lng?: number; analysis?: EvidenceAnalysis };
 
-export type NewAlert = { incidentId: string; audience: string; body: string; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed"; providerId?: string; idempotencyKey?: string };
-export type AlertClaim = { id: string; duplicate: boolean; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed" };
+export type NewAlert = { incidentId: string; audience: string; body: string; transport: "twilio" | "sns" | "demo"; status: "queued" | "sent" | "failed"; providerId?: string; idempotencyKey?: string };
+export type AlertClaim = { id: string; duplicate: boolean; transport: "twilio" | "sns" | "demo"; status: "queued" | "sent" | "failed" };
 
 export type Repo = {
   adapter: "supabase" | "memory";
@@ -126,7 +126,7 @@ function supabaseRepo(db: SupabaseClient): Repo {
       if (r.error?.code === UNIQUE_VIOLATION && a.idempotencyKey) {
         const prev = await db.from("alerts").select("id, transport, status").eq("idempotency_key", a.idempotencyKey).single();
         if (prev.error) throw new DbError("read alert", prev.error);
-        const p = prev.data as { id: string; transport: "twilio" | "demo"; status: "queued" | "sent" | "failed" };
+        const p = prev.data as { id: string; transport: "twilio" | "sns" | "demo"; status: "queued" | "sent" | "failed" };
         return { id: p.id, duplicate: true, transport: p.transport, status: p.status };
       }
       if (r.error) throw new DbError("insert alert", r.error);

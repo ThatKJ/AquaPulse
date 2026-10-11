@@ -67,5 +67,11 @@ Copy `.env.example` to `.env.local` for integrations. The scenarios need none.
 ## Demo
 Three-minute script: [`docs/DEMO_SCRIPT_FINAL.md`](docs/DEMO_SCRIPT_FINAL.md). Judge questions: [`docs/JUDGE_QA.md`](docs/JUDGE_QA.md). One-page architecture: [`docs/ARCHITECTURE_FINAL.md`](docs/ARCHITECTURE_FINAL.md). Screenshots: [`docs/screenshots/final-r2/`](docs/screenshots/final-r2). In the scenario view: Space play/pause, → next, R reset.
 
+## Hackathon Submission & Team
+- [AWS Hackathon Submission Dossier](docs/AWS_HACKATHON_SUBMISSION.md)
+- [AWS CDK Infrastructure as Code](infra/cdk/README.md)
+- [Contributors](CONTRIBUTORS.md)
+
 ## More
 [Status](docs/STATUS.md) · [n8n and Twilio](docs/N8N.md) · [AWS setup](docs/AWS_SETUP.md) · [Database](docs/DATABASE.md) · [Data provenance](docs/DATA_PROVENANCE.md) · [National sources](docs/NATIONAL_DATA_SOURCES.md) · [Performance](docs/PERFORMANCE.md) · [Design system](docs/DESIGN_SYSTEM.md) · [Decisions](docs/DECISIONS.md)
+

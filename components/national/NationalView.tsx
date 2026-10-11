@@ -2,6 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { LngLatBounds, Map as MlMap, setWorkerUrl, type ExpressionSpecification, type MapGeoJSONFeature } from "maplibre-gl";
 import { ArrowRight, Search, X } from "lucide-react";
 import districtIndex from "@/lib/national/districts.json";
@@ -289,9 +290,9 @@ export function NationalView({ onOpenLocal }: { onOpenLocal: () => void }) {
         ) : (
           <span className="text-muted">{load.status === "loading" ? "Loading current conditions…" : "National data unavailable"}</span>
         )}
-        <button type="button" onClick={() => window.location.assign("/?demo=1")} className="border-l border-hairline pl-4 uppercase tracking-[0.08em] text-muted hover:text-ink">
+        <Link href="/?demo=1" className="border-l border-hairline pl-4 uppercase tracking-[0.08em] text-muted hover:text-ink">
           Local demo
-        </button>
+        </Link>
       </header>
 
       <aside aria-label="National summary" className="absolute left-0 top-10 z-10 flex max-h-[calc(100%-40px-36px)] w-[248px] flex-col overflow-y-auto border-b border-r border-hairline bg-panel">

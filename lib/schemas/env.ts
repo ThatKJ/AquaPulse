@@ -11,6 +11,10 @@ const ServerEnvSchema = z.object({
   /** When set, AI calls go to the deployed Lambda instead of the local AWS SDK. */
   AI_ENDPOINT_URL: opt,
   AI_ENDPOINT_SECRET: opt,
+  /** Amazon SNS topic ARN for emergency municipal responder broadcasts. */
+  AWS_SNS_TOPIC_ARN: opt,
+  /** Amazon S3 bucket name for durable evidence storage. */
+  AWS_S3_EVIDENCE_BUCKET: opt,
   NEXT_PUBLIC_SUPABASE_URL: opt,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: opt,
   SUPABASE_SERVICE_ROLE_KEY: opt,

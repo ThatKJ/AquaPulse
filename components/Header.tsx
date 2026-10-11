@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Brain, ChevronRight, CircleCheck, CircleDashed, CircleX, CloudOff, CornerDownLeft, Database, Droplets, FlaskConical, TriangleAlert, type LucideIcon, MessageSquare, Workflow } from "lucide-react";
 import { AskRequestSchema, AskResponseSchema, HealthResponseSchema, type AskResponse, type HealthResponse } from "@/lib/schemas/api";
 import { Skeleton, Tag } from "./ui";
@@ -221,9 +222,9 @@ export function Header({
         <h1 className="text-[15px] font-semibold tracking-tight text-ink">AquaPulse</h1>
         <p className="hidden items-center gap-1.5 whitespace-nowrap text-[13px] text-muted lg:flex">
           {/* The local HydroTwin sits under the national view: India › Karnataka › Bengaluru. */}
-          <button type="button" className="hover:text-ink" onClick={() => window.location.assign("/live")}>
+          <Link href="/live" className="hover:text-ink">
             India
-          </button>
+          </Link>
           <span className="text-faint">›</span>
           <span>Bengaluru HydroTwin</span>
         </p>
