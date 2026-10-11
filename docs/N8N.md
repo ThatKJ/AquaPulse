@@ -1,21 +1,29 @@
 # n8n and Twilio
 
-**State (2026-10-11):** the citizen-report workflow is live on n8n Cloud (`https://thatkj.app.n8n.cloud`, workflow `XfaKArmc2N1OgAnd`, production webhook `/webhook/aquapulse/citizen-report`) and Twilio's trial WhatsApp number points at it. A real text ran through it at 06:02Z (execution 18). `n8n/citizen-report.json` is that deployed workflow. The other three workflow files have **not** been imported: treat them as UNVERIFIED.
+n8n does the wiring between services. It makes no decisions and holds no secrets: **n8n orchestrates, AquaPulse computes.**
 
-**Trust model for the citizen-report path:** n8n holds no secret and no credential. It forwards Twilio's form body and `X-Twilio-Signature` unchanged; AquaPulse is the only place the signature is verified. Because Twilio signed the n8n URL, AquaPulse accepts signatures for exactly one extra URL, set in `TWILIO_FORWARDER_URL` on the site. Change the n8n webhook path and that variable must change with it.
+## What is running
 
-**Twilio trial limits:** the "Try out WhatsApp" number rejects TwiML replies (error 12300, shown on every inbound message and harmless) and free-text REST messages (21654). Acknowledgements are sent by AquaPulse as a Twilio-provided template (`TWILIO_ACK_CONTENT_SID`).
+Two workflows are published on our n8n Cloud instance, and one is a draft.
 
-Division of labour: **n8n orchestrates, AquaPulse computes.** No scoring, fusion or thresholds live in n8n beyond the alert gate, which mirrors the engine's own bands.
+1. **Citizen report.** Twilio's WhatsApp number calls the n8n webhook `/webhook/aquapulse/citizen-report`. n8n forwards the request to AquaPulse unchanged and returns AquaPulse's answer to Twilio. A text and a location pin from a real phone have been through it (11 Oct 2026).
+2. **National data refresh.** Every 15 minutes n8n reads `/api/national` on the site, which makes the site refresh the NDMA and IMD feeds. This is why the data stays current with no visitor.
+3. **Critical alert (draft, not published).** It would send an alert when risk and confidence are both high. It has never sent anything. It needs a credential created by hand and an approved list of recipients first.
 
-**Update, night of 2026-10-10:** a local n8n through `npx` did not finish installing in 20 minutes and was abandoned; the Docker daemon is not running. The fastest path is n8n Cloud (setup below). To show a live inbound report without n8n or Twilio:
+## Who is trusted
 
-```bash
-curl -X POST https://aquapulse-liard.vercel.app/api/webhooks/report \\
-  -H "x-aquapulse-secret: $WEBHOOK_SECRET" -H "content-type: application/json" \\
-  -d '{"messageId":"SM-demo-'$(date +%s)'","from":"whatsapp:+910000000000","text":"TEST REPORT: drain overflowing onto the road","lat":12.92672,"lng":77.63805}'
-```
-With the dashboard open on the flood scenario (step 5 or later) it appears within about five seconds and fuses into F-01.
+n8n holds no secret and no credential for the citizen path. It passes on Twilio's form body and the `X-Twilio-Signature` header exactly as received. AquaPulse is the only place the signature is checked.
+
+Twilio signs the URL it called, which is the n8n URL. So AquaPulse accepts a signature for its own URL or for exactly one other URL, set in `TWILIO_FORWARDER_URL` on the site. Any other host, or even a trailing slash, gets a 403. If the n8n webhook path changes, that variable must change with it.
+
+## Twilio trial limits
+
+- Replies written as TwiML are rejected (error 12300, shown on every inbound message, harmless), and so are free-text messages (21654). AquaPulse acknowledges with a Twilio sample template instead (`TWILIO_ACK_CONTENT_SID`).
+- Photos: the message arrives and is stored, but the image cannot be downloaded (error 20003, "not available on a Trial account"). So a WhatsApp photo is not analysed. Photos uploaded in the console are.
+
+## Secrets
+
+No credentials are in this repository or in the workflow files. The site's secrets live in Vercel's environment settings. The draft alert workflow would need one header credential, created inside n8n by hand.
 
 ## Workflows on the instance
 
@@ -73,4 +81,4 @@ Gaps to know about:
 5. Location: WhatsApp only supplies `Latitude`/`Longitude` when the citizen shares a location pin. Reports without one are stored without a position.
 6. Media: fetched only from Twilio hosts (and Twilio's own storage bucket as a redirect target), 4 MB cap, type and magic-byte checks.
 
-Until a real signed message has been received and a real message delivered, Twilio stays UNVERIFIED.
+Verified on 11 Oct 2026 from a real phone: a signed text and a location pin were received, stored and acknowledged.

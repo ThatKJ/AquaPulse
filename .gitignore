@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files: only the example, which holds names and no values, is committed
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -45,3 +46,9 @@ next-env.d.ts
 .playwright-mcp/
 .impeccable/
 infra/ai-lambda/dist/
+
+# Demo film: raw footage, the edit project and its renders stay local.
+# The edit project has its own dependencies and would break the site build if committed here.
+docs/demo-recording/
+video/
+video-design/

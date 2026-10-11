@@ -1,6 +1,38 @@
 # AquaPulse status
 
-Updated 2026-10-11 19:20 IST. A row is PASS only if it was verified by a real call; where a public path exists, through the public deployment (`https://aquapulse-liard.vercel.app`). Every push to `main` deploys to production.
+Updated 11 Oct 2026, 22:50 IST. Production: https://aquapulse-liard.vercel.app · Demo video: https://youtu.be/GUdpmlMQuSw
+
+A row is PASS only if it was checked with a real call, through the public site where one exists. Every push to `main` deploys to production.
+
+## Today
+
+| Area | Status | Note |
+| --- | --- | --- |
+| Production | PASS | Live on Vercel; application code is commit `f9620ba`, tag `aquapulse-hackathon-final-r4`. Later commits change documentation only |
+| Tests | PASS | 58 tests, typecheck, lint and build all pass |
+| NDMA alerts | PASS | Live official feed, with freshness shown on screen |
+| IMD forecasts | PASS | Live official feed, with freshness shown on screen |
+| Scheduler | PASS | n8n refreshes both feeds every 15 minutes with no visitor |
+| Twilio | PARTIAL | Inbound WhatsApp works. It is a trial account: replies use Twilio's sample template, and photos cannot be downloaded |
+| n8n | PASS | Citizen-report and national-refresh workflows are published. The Critical Alert workflow is a draft and sends nothing |
+| WhatsApp text | PASS | Sent from a real phone, verified, stored once, acknowledged |
+| WhatsApp location | PASS | Pin from a real phone paired with the sender's report |
+| WhatsApp photo | BLOCKED_EXTERNAL | The message is received and stored. Twilio's trial refuses the image download (error 20003), so it is not analysed |
+| Rekognition | PASS | Live on photos uploaded in the console, through AWS Lambda |
+| Bedrock | BLOCKED_EXTERNAL | Blocked on this AWS account. Not used; the question box answers from labelled templates |
+| Supabase / PostGIS | PASS | Row-level security on every table, no public policies |
+| Flood scenario | PASS | Deterministic simulation: 3,822 exposed → 190, hospital protected |
+| Best Response | PASS | Winner: Clear Drain D104 + Deploy Pump P02. Pump alone 2,568, drain alone 1,067. Pinned by a test |
+| Priority Repairs | PASS | D104 first, P031 second, from simulated history |
+| Scarcity scenario | PASS | Deterministic simulation: deficit 2.5 → 3.7 ML/day, hospital served first |
+| False-report scenario | PASS | One unsupported report stays unverified at 14/100 |
+| Security | PARTIAL | Signature checks, idempotency, RLS, SSRF protection and least-privilege role all pass. No Content-Security-Policy, in-memory rate limit, no operator sign-in. See `SECURITY_REVIEW.md` |
+| Accessibility | PARTIAL | Labels, focus rings, keyboard pass, reduced motion, non-colour risk cues. No screen-reader pass |
+| Demo | PASS | 3-minute video published; live script in `DEMO_SCRIPT_FINAL.md` |
+| EventBridge scheduler | DEFERRED | Written in the template, never created. n8n does the job |
+| Operator sign-in | DEFERRED | The console is open; nothing in it writes to the server except the demo mirror |
+
+The rest of this file is the dated evidence behind the table. Where an older section disagrees with the table, the table is right.
 
 ## Re-verification, 2026-10-11 18:40–19:20 IST (commit after `bd3289e`)
 
@@ -23,7 +55,7 @@ Every row below was checked again against production unless noted.
 - Critical Alert workflow: draft, unpublished, READY_AFTER_HACKATHON.
 - New: `DEMO_SCRIPT_FINAL.md`, `JUDGE_QA.md`, `ARCHITECTURE_FINAL.md`, `screenshots/final-r2/`.
 
-## Summary (authoritative)
+## Detailed summary
 
 | Feature | Status | Real / simulated | Evidence | Limitation |
 | --- | --- | --- | --- | --- |
@@ -50,7 +82,7 @@ Every row below was checked again against production unless noted.
 | Scenarios unaffected by live reports | PASS | | Fixed 06:20Z: a report sent just before a scenario run was being merged into it (false report read 31/100). Scenario runs now start clean | A report arriving during a run is still shown and merged, by design |
 | Question box | PASS | Template over engine output | Answer labelled "Grounded system response … Not an LLM" | No LLM |
 | Responsive | PASS | | No horizontal overflow at 1366, 1440, 1920 and 390 (landing) | Console is desktop only |
-| Accessibility | PARTIAL | | Labels, focus rings, reduced motion, non-colour risk cues in place | No keyboard or screen-reader pass this round |
+| Accessibility | PARTIAL | | Labels, focus rings, reduced motion, non-colour risk cues in place | Keyboard pass done; no screen-reader pass |
 | Security | PASS with PARTIAL items | | `docs/SECURITY_REVIEW.md` | No CSP, in-memory rate limit, open console |
 | Performance | PASS | | `docs/PERFORMANCE.md` | |
 | Tests | PASS | | 58 tests (engine, scenarios, national, webhook); typecheck, lint, build clean | Browser checks are scripted Playwright runs, not a committed E2E suite |

@@ -1,66 +1,57 @@
 # Judge Q&A
 
-Short spoken answers, 20–40 seconds each.
+Short answers to say out loud.
 
-**Why AquaPulse?**
-Water emergencies fail at the decision, not the data. Officials have alerts, citizens have phones, engineers have asset records, and nobody joins them fast enough. AquaPulse answers four questions on one screen: where is the problem, why, what happens next, and what should we do.
+**What problem are you solving?**
+In a flood or a water shortage, the people in charge have alerts in one place, complaints in another, and no way to test a response before sending crews. AquaPulse puts it on one screen and answers four questions: where is the problem, why, what happens next, and what should we do.
 
-**Why not existing flood maps?**
-A flood map shows where water is. It does not tell you which hospital is thirty minutes from trouble, or whether a pump or a drain crew helps more. AquaPulse goes from the map to a ranked response with the expected result, and then records whether it worked.
+**Why not just use weather or flood maps?**
+A map tells you where the water is. It does not tell you which hospital is thirty minutes from trouble, or whether a pump or a drain crew helps more. AquaPulse goes from the map to a ranked response with a number attached.
 
-**What AI is used?**
-Amazon Rekognition reads citizen photos and labels what is in them. That is the only machine-learning model in the live path. Bedrock is blocked on our AWS account, so the question box answers from templates and is labelled "not an LLM".
-
-**What is deterministic?**
-Every number: risk, people exposed, the confidence score, the ranking of responses, the repair priorities. Same input, same output, covered by tests. A language model may explain a number but never produces one.
-
-**What is real data?**
-The national view: NDMA SACHET alerts and IMD nowcasts, refreshed every fifteen minutes with a freshness state. WhatsApp reports are real messages through Twilio. Rekognition, Lambda, Supabase and n8n are real services.
+**What is live?**
+The India map: official NDMA alerts and IMD rain forecasts, refreshed every fifteen minutes. WhatsApp text and location reports, tested from a real phone. Amazon Rekognition on uploaded photos. Supabase, n8n, Twilio and AWS Lambda are all real services.
 
 **What is simulated?**
-The Bengaluru neighbourhood: drains, pipes, pumps, population and failure history are synthetic and labelled SIMULATED on screen. No city gave us asset data in a day, so we built the model to take it when one does.
+The Bengaluru neighbourhood. Its drains, pipes, pumps, population and failure history are synthetic and labelled as simulated on screen. No city gave us asset data in a day, so we built the model to take real data when one does.
 
-**Why both flood and scarcity?**
-The same city gets both in the same year, and the same pipes, pumps and crews serve both. One model of the water network lets one team handle too much water and too little.
+**What does AWS do?**
+Amazon Rekognition reads uploaded photos and tells us what is in them. It runs inside an AWS Lambda whose role can do that one thing, with logs in CloudWatch. The website itself never holds AWS keys.
+
+**Do you use an LLM?**
+No. Every number comes from a deterministic model: same input, same output, covered by tests. Bedrock is blocked on our account, so the question box answers from templates and says so.
 
 **Why n8n?**
-It is the wiring between services: it receives the Twilio webhook and runs the fifteen-minute refresh. It holds no secrets and makes no decisions. A city IT team can read and change it without touching our code.
+It is the wiring. It receives the WhatsApp webhook from Twilio and runs the fifteen-minute data refresh. It holds no secrets and makes no decisions, so a city IT team can read and change it without touching our code.
 
-**Why AWS?**
-Rekognition for photos, Lambda to run it with a role that can do exactly one thing, CloudWatch for logs, all in the Mumbai region. The website never holds AWS keys.
+**How do citizen reports work?**
+Someone sends a WhatsApp message and a location pin. It goes through Twilio and n8n to AquaPulse, which checks Twilio's signature, stores the message once, and shows it in the console within seconds. The phone number is stored only as a hash.
 
-**Why WhatsApp?**
-It is already on nearly every phone in India. No app to install, and a location pin and a photo come free.
-
-**How does it avoid fake citizen reports?**
-A single report cannot trigger anything. It needs independent confirmations nearby in time and place, consistency with weather, and a link to a known asset. In our false-report scenario one unsupported message scores 14 out of 100 and stays Unverified.
+**How do you avoid fake reports?**
+One report cannot trigger anything. It needs other reports nearby in place and time, weather that fits, and a link to a known asset. In our false-report scenario a single unsupported message scores 14 out of 100 and stays unverified.
 
 **How is confidence calculated?**
-Eight weighted checks that add up to 100: photo analysis, independent confirmations, weather consistency, GPS, timing, duplicates, a human validator, and correlation with infrastructure. 40 asks for verification, 70 escalates. The breakdown is on screen.
-
-**How does it predict?**
-A cell-based model of the neighbourhood. Each hexagon has elevation, drainage and rainfall; water moves downhill and blocked drains hold it. We run it for now, 15, 30 and 60 minutes and count people and facilities over the risk threshold.
+Eight weighted checks that add up to 100, including photo analysis, independent confirmations, weather, location and timing. At 40 we ask for verification, at 70 we escalate. The breakdown is on screen.
 
 **How does Best Response work?**
-It lists every feasible action and pair with the crews and pumps actually available, simulates each one, and scores it on exposure reduced, facilities protected, equity, confidence, cost and time. In the demo: the pump alone leaves 2,568 exposed, the drain alone 1,067, both together 190.
+It lists every action the available crews and pumps can actually deliver, alone and in pairs, and simulates each one. In the demo, the pump alone leaves 2,568 people exposed, clearing the drain leaves 1,067, and both together leave 190 with the hospital protected.
 
-**How does the learning loop work?**
-After an action we record expected against observed. That outcome joins the asset's history. Assets that keep failing rise in the repair list, so drain D104, with nine failures, becomes repair number one.
+**How does the system learn?**
+After each response it records what it expected against what happened, and adds that to the history of the asset that failed. Assets that keep failing rise up the repair list. That is why drain D104 is repair number one.
 
-**Can this scale nationally?**
-The national layer already covers every district from official feeds. The detailed model is per city and needs that city's network data. The code path is the same; the limit is data, not compute.
+**Why both flood and scarcity?**
+The same city gets both in the same year, through the same pipes, pumps and crews. One model of the water network handles too much water and too little.
 
-**Why is the detailed model only in Bengaluru?**
-One day, one city. We chose depth in one place over a thin layer everywhere, and labelled it as simulated.
+**Can this scale across India?**
+The national layer already covers every district, because it reads feeds the agencies publish. The street-level model is per city and needs that city's network data. The limit is data, not computing.
 
-**What if the internet or a feed fails?**
-The header shows DELAYED, STALE or OFFLINE and keeps the last good data. The local model runs entirely in the browser, so the decision screen works with no network.
+**Why is the local HydroTwin only in Bengaluru?**
+We had one day, so we chose depth in one place over a thin layer everywhere. It is labelled as a simulation. Adding a city means loading its drains, pipes and population.
 
-**What about government adoption?**
-It reads the feeds agencies already publish and uses WhatsApp, which staff already use. It does not replace their systems. A pilot needs one ward's asset list and a control-room screen.
+**What happens when a data source is offline?**
+The header shows DELAYED, STALE or OFFLINE and keeps the last good data on screen. Missing inputs are shown as unknown, never as zero. The local model runs in the browser, so the decision screen still works.
 
-**What makes this unique?**
-It closes the loop. Evidence, forecast, a ranked response with a number attached, proof that it worked, and a repair list so it does not happen again.
+**What does not work yet?**
+A photo sent by WhatsApp is not analysed, because Twilio's trial account blocks the download; uploaded photos are. The alert workflow is a draft and sends nothing. The console has no sign-in.
 
-**How would you deploy or charge for it?**
-A yearly subscription per city, priced by population, sold to the municipal corporation or the disaster authority. The first step is a free one-ward pilot through a monsoon.
+**Who would use it, and how would you charge?**
+A city's disaster cell or water board. It reads feeds they already have and uses WhatsApp, which staff already use. We would start with a free pilot in one ward through a monsoon, then a yearly subscription per city.
